@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-const movieSchema = new mongoose.Schema({
+const rotten = new mongoose.Schema({
     rotten_tomatoes_link: String,
     movie_title: String,
     critic_name:String,
@@ -13,7 +13,7 @@ const movieSchema = new mongoose.Schema({
             values: ['Fresh', 'Rotten'],
             message: '{VALUE} non è un tipo di recensione valido. Usa "Fresh" o "Rotten".'
         },
-        trim: true // Rimuove eventuali spazi bianchi accidentali
+        trim: true // Remove additional spaces
     },
     review_score: String,
     review_date: Date,
@@ -21,3 +21,5 @@ const movieSchema = new mongoose.Schema({
 }, {
     collection: 'RottenTomatoes'
 });
+
+module.exports = mongoose.model('RottenTomatoes', rotten);

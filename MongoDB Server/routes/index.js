@@ -3,3 +3,4 @@ var router = express.Router();
 var oscarController = require('../controller/oscarController');
 var rotomController = require('../controller/rotomController');
 
+//router.get for all controllers functions
