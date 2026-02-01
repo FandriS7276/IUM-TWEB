@@ -7,7 +7,7 @@ exports.getRotom = async (req,res) => {
         res.json({
             success: true,
             data:{
-                rotomScheme : rotom,
+                reviews : rotom,
             },
         });
     }catch (error){
@@ -29,8 +29,8 @@ exports.getSnubbedMovies = async (req, res) => {
             { $match: { review_type: 'Fresh' } },
             {
                 $lookup: {
-                    from: "oscarScheme", // da rivedere
-                    localField: "title",
+                    from: "Oscar",
+                    localField: "movie_title",
                     foreignField: "film",
                     as: "oscar_info"
                 }
@@ -51,8 +51,8 @@ exports.getSnubbedMovies = async (req, res) => {
 exports.getReviewsByType = async (req, res) => {
     try {
         const { title, type } = req.query; // type can only be 'Fresh' o 'Rotten'
-        const filter = { title: new RegExp(title, 'i') };
-
+        const filter = {};
+        if (title) filter.movie_title = new RegExp(title, 'i')
         if (type) filter.review_type = type;
 
         const reviews = await rotomScheme.find(filter).limit(50);

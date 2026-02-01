@@ -1,14 +1,14 @@
-const oscarScheme =require('../scheme/oscarScheme')
+const oscar =require('../scheme/oscarScheme')
 
 //Get all oscars awards
 
 exports.getOscar = async (req,res) => {
     try{
-        const CollectionTheOscarAwards = await  oscarScheme.find().limit(100);
+        const CollectionTheOscarAwards = await  oscar.find().limit(100);
         res.json({
             success: true,
             data:{
-                theOscarAwards : CollectionTheOscarAwards,
+                Oscar : CollectionTheOscarAwards,
             },
         });
     }catch (error){
@@ -22,16 +22,15 @@ exports.getOscar = async (req,res) => {
 
 //Movies that have won an oscar but have rotten reviews
 
-
 exports.getControversialWinners = async (req, res) => {
     try {
-        const controversial = await oscarScheme.aggregate([
-            { $match: { winner: true } }, // Solo i vincitori dell'Oscar
+        const controversial = await oscar.aggregate([
+            { $match: { winner: true } }, // Filtering only the oscar winning movies
             {
                 $lookup: {
-                    from: "rottentomatoesreviews",
+                    from: "RottenTomatoes",
                     localField: "film",
-                    foreignField: "title",
+                    foreignField: "movie_title",
                     as: "reviews"
                 }
             },
