@@ -1,27 +1,69 @@
-const rotomScheme =require('../schema/rotomSchema')
-//Shows all rotten tomatoes
+const rottenReview =require('../schema/rotomSchema')
 
-exports.getRotom = async (req,res) => {
+//Get all rotten tomatoes
+exports.getAllRottenReviews = async (req,res) => {
     try{
-        const rotom = await rotomScheme.find().limit(100);
+        // Get page & limit from URL query (?page=2&limit=50), default to page 1, 100 per page
+        const page  = req.query.page  ? Number(req.query.page)  : 1;    // Default to page 1 if not specified
+        const limit = req.query.limit ? Number(req.query.limit) : 100;  // Default to 100 reviews per page if not specified,
+                                                                        // can be adjusted by client with ?limit=50 for example
+                                                                        // (max 500 to prevent abuse)
+
+        // Basic validation for page and limit (ensure they are positive integers and limit is not too high to prevent abuse
+        // as DoS attack with very high limit could crash the server by trying to load too many documents in memory)
+        if (page < 1 || isNaN(page) || limit < 1 || isNaN(limit) || limit > 500) {
+            return res.status(400).json({
+            success: false,
+            message: 'Invalid pagination parameters: page must be >= 1, limit must be between 1 and 500'
+            });
+        }
+
+        const skip = (page - 1) * limit;
+
+        const reviews = await rottenReview
+                        .find()
+                        .sort({ review_date: -1 }) // Newest reviews first
+                        .skip(skip)
+                        .limit(limit);
+
+        const total = await rottenReview.countDocuments();
+
         res.json({
             success: true,
-            data:{
-                reviews : rotom,
+            data: reviews,
+            pagination: {
+                totalDocs: total,
+                currentPage: page,
+                totalPages: Math.ceil(total / limit),   // Total pages based on count and limit, rounded by Math.ceil to ensure
+                                                        // we have enough pages for all docs
+                hasNext: page * limit < total,          // True if there are more pages after current
+                hasPrev: page > 1,                      // True if there are pages before current
+                perPage: limit
             },
+
+            // Optional metadata for frontend, e.g., when data was fetched, how many results returned etc. Can be useful for debugging or UI display
+            metadata: {
+            fetchedAt:  new Date().toISOString(),
+            resultCount: reviews.length
+            }
         });
-    }catch (error){
-        res.status(500).json({
-            success: false,
-            message: 'not found',
-            error:error.message,
+    }
+    catch (err) {
+    console.error('Error fetching Rotten reviews:', err);
+    res.status(500).json({
+        success: false,
+        message: 'Failed to retrieve Rotten Tomatoes reviews',
+
+        // Checks if app is running in "development" mode
+        // If yes → send the real error message (helps debugging)
+        // If no (production) → hide the error details (security: don't leak stack traces/database paths to users/hackers)
+        // error: process.env.NODE_ENV === 'development' ? err.message : undefined
+        error: err.message
         });
     }
 }
 
 //Shows the most loved movies that have not won or been nominated for an oscar
-
-
 exports.getSnubbedMovies = async (req, res) => {
     try {
         const snubbed = await rotomScheme.aggregate([
@@ -41,7 +83,7 @@ exports.getSnubbedMovies = async (req, res) => {
         ]);
 
         res.json({ success: true, count: snubbed.length, data: snubbed });
-    } catch (error) {
+    } catch (err) {
         res.status(500).json({ success: false, error: error.message });
     }
 };
@@ -62,8 +104,8 @@ exports.getReviewsByType = async (req, res) => {
             count: reviews.length,
             data: reviews
         });
-    } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
     }
 };
 
