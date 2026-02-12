@@ -1,4 +1,4 @@
-const oscar =require('../scheme/oscarScheme')
+const oscar =require('../schema/oscarSchema')
 
 //Get all oscars awards
 

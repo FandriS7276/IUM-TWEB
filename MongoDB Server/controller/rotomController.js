@@ -1,4 +1,4 @@
-const rotomScheme =require('../scheme/rotomScheme')
+const rotomScheme =require('../schema/rotomSchema')
 //Shows all rotten tomatoes
 
 exports.getRotom = async (req,res) => {

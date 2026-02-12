@@ -9,7 +9,7 @@ const oscar = new mongoose.Schema({
     film: String,
     winner: Boolean
 }, {
-    collection: 'Oscar'
+    collection: 'oscarCollection'
 });
 
-module.exports = mongoose.model('Oscar', oscar);
+module.exports = mongoose.model('oscarCollection', oscar);

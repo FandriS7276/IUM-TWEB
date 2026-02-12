@@ -19,7 +19,7 @@ const rotten = new mongoose.Schema({
     review_date: Date,
     review_content: String
 }, {
-    collection: 'RottenTomatoes'
+    collection: 'rottenCollection'
 });
 
-module.exports = mongoose.model('RottenTomatoes', rotten);
+module.exports = mongoose.model('rottenCollection', rotten);
