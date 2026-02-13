@@ -53,12 +53,12 @@ exports.getAllRottenReviews = async (req,res) => {
     res.status(500).json({
         success: false,
         message: 'Failed to retrieve Rotten Tomatoes reviews',
+        error: err.message
 
         // Checks if app is running in "development" mode
         // If yes → send the real error message (helps debugging)
         // If no (production) → hide the error details (security: don't leak stack traces/database paths to users/hackers)
         // error: process.env.NODE_ENV === 'development' ? err.message : undefined
-        error: err.message
         });
     }
 }
@@ -82,14 +82,26 @@ exports.getSnubbedMovies = async (req, res) => {
             { $limit: 50 }
         ]);
 
-        res.json({ success: true, count: snubbed.length, data: snubbed });
-    } catch (err) {
-        res.status(500).json({ success: false, error: error.message });
+        res.json({
+            success: true,
+            count: snubbed.length,
+            data: snubbed,
+            metadata: {
+                fetchedAt: new Date().toISOString()
+            }
+        });
+    }
+    catch (err) {
+        console.error('Error fetching snubbed movies:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to find snubbed Fresh movies',
+            error: err.message
+        });
     }
 };
 
-//Dynamic filtering for specific movies by review type
-
+//Dynamic filtering for specific movies by review type or title
 exports.getReviewsByType = async (req, res) => {
     try {
         const { title, type } = req.query; // type can only be 'Fresh' o 'Rotten'
@@ -102,10 +114,20 @@ exports.getReviewsByType = async (req, res) => {
         res.json({
             success: true,
             count: reviews.length,
-            data: reviews
+            data: reviews,
+            metadata: {
+                fetchedAt: new Date().toISOString(),
+                query: { title: req.query.title, type: req.query.type }
+            }
         });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
+    }
+    catch (err) {
+    console.error('Error fetching reviews by type:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve reviews by type/title',
+            error: err.message
+        });
     }
 };
 

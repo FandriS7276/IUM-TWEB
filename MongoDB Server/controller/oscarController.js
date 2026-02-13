@@ -52,6 +52,7 @@ exports.getAllOscars = async (req, res) => {
             success: false,
             message: 'Failed to retrieve Oscars data',
             error: err.message                          // ← always send for now (safe while developing)
+            
             // Checks if app is running in "development" mode
             // If yes → send the real error message (helps debugging)
             // If no (production) → hide the error details (security: don't leak stack traces/database paths to users/hackers)
@@ -67,7 +68,7 @@ try {
         // Only winners first (cheap, fast filter)
         { $match: { winner: true } },
 
-        // Optional: add index on film + winner if not already
+        // Join with rotten reviews based on film title (case-insensitive)
         {
         $lookup: {
                 from: "rottenCollection",                    // ← use real collection name
@@ -75,6 +76,8 @@ try {
                 pipeline: [
                     {
                     $match: {
+                        // $expr lets us use aggregation expressions (like $toLower, math, comparisons) inside a $match stage.
+                        // { $eq: [ left, right ] } checks if left == right (equality).
                         $expr: { $eq: [{ $toLower: "$movie_title" }, "$$filmTitle"] }
                         }
                     },
@@ -85,8 +88,14 @@ try {
             }
         },
 
-        { $match: { "rotten_reviews.0": { $exists: true } } }, // At least one rotten review
+        // Only keep winners that have at least one rotten review (controversial)
+        { $match: { "rotten_reviews.0": { $exists: true } } },
 
+        // Optional: sort by number of rotten reviews (most controversial first)
+        { $addFields: { rotten_count: { $size: "$rotten_reviews" } } },
+        { $sort: { rotten_count: -1 } },
+
+        // Optional: limit to top 20 most controversial winners (adjust as needed)
         { $limit: 20 },
 
         // Optional projection – clean output
@@ -104,11 +113,23 @@ try {
                 }
             }
         }
-        }
+    }
         ]);
-        res.json({ success: true, data: controversial });
+        res.json({
+            success: true,
+            data: controversial,
+            metadata: {
+                fetchedAt: new Date().toISOString(),
+                resultCount: controversial.length
+                }
+            });
     }
     catch (err) {
-        res.status(500).json({ success: false, error: err.message });
+        console.error('Error fetching controversial Oscar winners:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to find controversial Oscar-winning movies',
+            error: err.message
+            });
     }
 };
