@@ -22,4 +22,4 @@ const rotten = new mongoose.Schema({
     collection: 'rottenCollection'
 });
 
-export default mongoose.model('rottenCollection', rotten);
+module.exports = mongoose.model('rottenCollection', rotten);

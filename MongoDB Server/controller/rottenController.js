@@ -4,10 +4,10 @@ const rottenReview =require('../schema/rottenSchema')
 exports.getAllRottenReviews = async (req,res) => {
     try{
         // Get page & limit from URL query (?page=2&limit=50), default to page 1, 100 per page
-        const page  = req.query.page  ? Number(req.query.page)  : 1;    // Default to page 1 if not specified
-        const limit = req.query.limit ? Number(req.query.limit) : 100;  // Default to 100 reviews per page if not specified,
-                                                                        // can be adjusted by client with ?limit=50 for example
-                                                                        // (max 500 to prevent abuse)
+        const page = Number(req.query.page) || 1;    // Default to page 1 if not specified
+        const limit = Math.min(Number(req.query.limit) || 100, 500);// Default to 100 reviews per page if not specified,
+                                                                    // can be adjusted by client with ?limit=50 for example
+                                                                    // (max 500 to prevent abuse)
 
         // Basic validation for page and limit (ensure they are positive integers and limit is not too high to prevent abuse
         // as DoS attack with very high limit could crash the server by trying to load too many documents in memory)

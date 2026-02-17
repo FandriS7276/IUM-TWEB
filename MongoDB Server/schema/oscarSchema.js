@@ -12,4 +12,4 @@ const oscar = new mongoose.Schema({
     collection: 'oscarCollection'
 });
 
-export default mongoose.model('oscarCollection', oscar);
+module.exports = mongoose.model('oscarCollection', oscar);
