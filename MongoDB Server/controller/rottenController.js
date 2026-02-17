@@ -1,4 +1,4 @@
-const rottenReview =require('../schema/rotomSchema')
+const rottenReview =require('../schema/rottenSchema')
 
 //Get all rotten tomatoes
 exports.getAllRottenReviews = async (req,res) => {
@@ -66,7 +66,7 @@ exports.getAllRottenReviews = async (req,res) => {
 //Shows the most loved movies that have not won or been nominated for an oscar
 exports.getSnubbedMovies = async (req, res) => {
     try {
-        const snubbed = await rotomScheme.aggregate([
+        const snubbed = await rottenReview.aggregate([
             // Filter by fresh reviews
             { $match: { review_type: 'Fresh' } },
             {
@@ -109,7 +109,7 @@ exports.getReviewsByType = async (req, res) => {
         if (title) filter.movie_title = new RegExp(title, 'i')
         if (type) filter.review_type = type;
 
-        const reviews = await rotomScheme.find(filter).limit(50);
+        const reviews = await rottenReview.find(filter).limit(50);
 
         res.json({
             success: true,

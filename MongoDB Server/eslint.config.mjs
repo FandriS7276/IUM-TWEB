@@ -2,29 +2,32 @@ import js from '@eslint/js';
 import globals from 'globals';
 
 export default [
-  js.configs.recommended,           // base recommended rules
+  js.configs.recommended,
 
   {
+    files: ['**/*.js'],  // apply to all .js files
     languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'commonjs',  // ← this line MUST be here for ALL files
       globals: {
-        ...globals.node,            // adds process, __dirname, __filename, etc.
+        ...globals.node,
         require: 'readonly',
         module: 'readonly',
         exports: 'readonly',
-      },
-      ecmaVersion: 2022,            // modern but still compatible
-      sourceType: 'commonjs',       // ← THIS IS THE KEY LINE
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        process: 'readonly'
+      }
     },
-
     rules: {
       'no-unused-vars': 'warn',     // downgrade from error → less annoying
       'no-console': 'off',          // allow console.log in backend
-      'no-undef': 'error',          // keep it strict
-    },
+      'no-undef': 'error'          // keep it strict
+    }
   },
 
   // Optional: ignore patterns (add folders/files you don't want linted)
   {
-    ignores: ['node_modules/**', 'public/**'],
-  },
+    ignores: ['node_modules/**', 'public/**']
+  }
 ];

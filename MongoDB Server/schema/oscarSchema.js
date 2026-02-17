@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+const mongoose = require('mongoose');
 
 const oscar = new mongoose.Schema({
     year_film: Number,
@@ -12,4 +12,4 @@ const oscar = new mongoose.Schema({
     collection: 'oscarCollection'
 });
 
-module.exports = mongoose.model('oscarCollection', oscar);
+export default mongoose.model('oscarCollection', oscar);

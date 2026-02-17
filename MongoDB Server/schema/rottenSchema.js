@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+const mongoose = require('mongoose');
 
 const rotten = new mongoose.Schema({
     rotten_tomatoes_link: String,
@@ -22,4 +22,4 @@ const rotten = new mongoose.Schema({
     collection: 'rottenCollection'
 });
 
-module.exports = mongoose.model('rottenCollection', rotten);
+export default mongoose.model('rottenCollection', rotten);
