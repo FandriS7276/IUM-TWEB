@@ -6,3 +6,6 @@ nvm alias default lts/*
 
 npm install dotenv
 npm install express-rate-limit
+
+npm install eslint --save-dev
+npx eslint --init
