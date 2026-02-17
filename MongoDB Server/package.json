@@ -1,17 +1,27 @@
 {
   "name": "progetto-tweb",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
+  "type": "commonjs",
   "scripts": {
-    "start": "node ./bin/www"
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "lint": "eslint . --ext .js"
   },
   "dependencies": {
-    "cookie-parser": "~1.4.4",
-    "debug": "~2.6.9",
-    "express": "~4.16.1",
-    "hbs": "~4.0.4",
-    "http-errors": "~1.6.3",
+    "compression": "^1.8.1",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "debug": "^4.4.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.22.1",
+    "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
+    "http-errors": "^2.0.0",
     "mongoose": "^9.1.5",
-    "morgan": "~1.9.1"
+    "morgan": "^1.10.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
   }
 }
