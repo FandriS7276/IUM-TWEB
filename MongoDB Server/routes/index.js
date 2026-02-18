@@ -8,3 +8,5 @@ router.get('/api/rotten', rottenController.getAllRottenReviews);
 router.get('/api/controversial-winners', oscarController.getControversialOscarWinners);
 router.get('/api/snubbed-movies', rottenController.getSnubbedMovies);
 router.get('/api/reviews-by-type', rottenController.getReviewsByType);
+
+module.exports = router;
