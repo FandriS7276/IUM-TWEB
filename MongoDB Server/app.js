@@ -2,9 +2,9 @@ require('dotenv').config();   // ← this line loads environment variables from 
 // allowing us to use process.env.PORT, process.env.MONGODB_URI etc. in our code without hardcoding sensitive info.
 // Make sure to create a .env file with the appropriate variables and never commit it to version control!
 
-var createError = require('http-errors');
+
+// Dependencies
 var express = require('express');
-var path = require('path');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
 
@@ -15,12 +15,6 @@ const rateLimit = require('express-rate-limit');
 const cors = require('cors');
 const corsOptions = require('./config/cors');
 
-// database connection
-const database = require("./database/dbConnect");
-
-
-var indexRouter = require('./routes/index');
-var usersRouter = require('./routes/users');
 
 var app = express();
 
@@ -89,12 +83,23 @@ app.use((req, res, next) => {
   });
 });
 
-// Listening port and server start --> goes last because we want to ensure all middleware and routes are set up
-// before accepting requests
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is live on http://localhost:${PORT}`);
-  console.log(`Time check: ${new Date().toISOString()}`);  // optional flex
-});
+// Database connection
+const dbConnect = require('./database/dbConnect');
+
+// Start server after DB connection is established
+(async () => {
+  try {
+    await dbConnect();  // waits for connection to succeed or fail before starting server – prevents "server running but DB dead" scenario
+    const PORT = process.env.PORT || 4000;
+    app.listen(PORT, () => {
+      console.log(`Server live on http://localhost:${PORT}`);
+      console.log(`Time check: ${new Date().toISOString()}`);
+    });
+  } catch (err) {
+    console.error('Server start aborted – DB connection failed:', err.message);
+    console.error('Full error:', err.stack);
+    process.exit(1);
+  }
+})();
 
 module.exports = app;
