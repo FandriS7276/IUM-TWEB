@@ -58,8 +58,8 @@ exports.getAllReviews = async (req,res) => {
     }
 }
 
-const {getSnubbedTitles} = require('../database/snubbedCache');
-const {getAllStats} = require('../database/statsCache');
+const client = require('../database/redisClient');
+const SNUBBED_KEY = 'snubbed:movies';
 
 //Shows the most loved movies that have not won or been nominated for an oscar
 exports.getSnubbedMovies = async (req, res) => {
@@ -74,7 +74,7 @@ exports.getSnubbedMovies = async (req, res) => {
             });
         }
 
-        const titles = getSnubbedTitles();
+        const titles = await client.zRange(SNUBBED_KEY, 0, -1, { REV: true }); // Get all snubbed titles sorted by score descending
 
         if (titles.length === 0) {
             return res.status(200).json({
@@ -96,11 +96,12 @@ exports.getSnubbedMovies = async (req, res) => {
             });
         }
         
-        const allStats = getAllStats();
+        const statsKeys = titles.map(title => `movie:stats:${title}`);
+        const statsArrays = await client.mGet(statsKeys);
 
         const enriched = titles
-            .map(title => allStats[title])
-            .filter(stat => stat !== null) // Filter out any titles that don't have stats (e.g., no reviews at all)
+            .filter(boolean)
+            .map(JSON.parse)
             .sort((a, b) => b.freshCount - a.freshCount); // Sort by freshCount descending (most loved first)
 
         const paginated = enriched.slice(skip, skip + limit);

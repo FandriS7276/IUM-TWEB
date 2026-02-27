@@ -17,3 +17,6 @@ npx eslint --init
 
 # using vite 8 beta for react.jsx templating
 npm create vite@latest < folder-name > -- --template react
+
+# using redis to speed up caching and file reading during calls
+npm install redis

@@ -1,75 +1,66 @@
-const fs = require('fs').promises;
-const path = require('path');
-const rottenReview = require('../schema/rottenSchema');
+const client = require('./redisClient');
 
-const STATS_FILE = path.join(__dirname, 'statsCache.json');
+const STATS_PREFIX = 'movie:stats:';
+const STATS_TTL = 3600; // 1 hour
 
-let statsCache = null; // { "Oppenheimer": { freshCount: 342, tomatometer: 96.5, totalReviews: 355, ... } }
-
-async function refreshStatsCache() {
-    console.log('Refreshing hourly movie stats cache...');
-
+async function refreshMovieStats(movieTitle) {
     const pipeline = [
+        { $match: { movie_title: movieTitle } },
         {
             $group: {
-                _id: '$movie_title',
-                freshCount: {
-                    $sum: { $cond: [{ $eq: ['$review_type', 'Fresh'] }, 1, 0] }
-                },
-                rottenCount: {
-                    $sum: { $cond: [{ $eq: ['$review_type', 'Rotten'] }, 1, 0] }
-                },
+                _id: null,
                 totalReviews: { $sum: 1 },
+                freshCount: { $sum: { $cond: [{ $eq: ['$review_type', 'Fresh'] }, 1, 0] } },
+                rottenCount: { $sum: { $cond: [{ $eq: ['$review_type', 'Rotten'] }, 1, 0] } },
+                topCriticFresh: {
+                    $sum: { $cond: [{ $and: [{ $eq: ['$review_type', 'Fresh'] }, { $eq: ['$top_critic', true] }] }, 1, 0] }
+                },
                 latestReview: { $max: '$review_date' }
             }
         },
         {
             $project: {
-                movie_title: '$_id',
+                totalReviews: 1,
                 freshCount: 1,
                 rottenCount: 1,
-                totalReviews: 1,
                 tomatometer: {
-                    $cond: [
-                        { $eq: ['$totalReviews', 0] },
-                        0,
-                        { $multiply: [{ $divide: ['$freshCount', '$totalReviews'] }, 100] }
-                    ]
+                    $cond: [{ $eq: ['$totalReviews', 0] }, 0, { $multiply: [{ $divide: ['$freshCount', '$totalReviews'] }, 100] }]
                 },
-                latestReview: 1,
-                _id: 0
+                topCriticFreshCount: 1,
+                latestReview: 1
             }
-        },
-      { $sort: { freshCount: -1 } } // most liked first
+        }
     ];
 
     const result = await rottenReview.aggregate(pipeline);
+    const stats = result[0] || { totalReviews: 0, freshCount: 0, rottenCount: 0, tomatometer: 0, topCriticFreshCount: 0, latestReview: null };
 
-    // Convert to object for fast lookup
-    statsCache = {};
-    result.forEach(stat => {
-        statsCache[stat.movie_title] = stat;
-    });
+    await client.hSet(`${STATS_PREFIX}${movieTitle}`, stats);
+    await client.expire(`${STATS_PREFIX}${movieTitle}`, STATS_TTL);
 
-    await fs.writeFile(STATS_FILE, JSON.stringify(statsCache, null, 2));
-
-    console.log(`Stats cache refreshed: ${Object.keys(statsCache).length} movies`);
+    return stats;
 }
 
-async function loadStatsCache() {
-    try {
-        const data = await fs.readFile(STATS_FILE, 'utf8');
-        statsCache = JSON.parse(data);
-        console.log(`Stats cache loaded: ${Object.keys(statsCache).length} movies`);
-    } catch (err) {
-        console.log('No stats cache file yet — will build on next refresh');
-        statsCache = {};
+async function getMovieStats(movieTitle) {
+    const key = `${STATS_PREFIX}${movieTitle}`;
+    const cached = await client.hGetAll(key);
+
+    if (Object.keys(cached).length > 0) {
+        return {
+            totalReviews: Number(cached.totalReviews),
+            freshCount: Number(cached.freshCount),
+            rottenCount: Number(cached.rottenCount),
+            tomatometer: Number(cached.tomatometer),
+            topCriticFreshCount: Number(cached.topCriticFreshCount),
+            latestReview: cached.latestReview || null
+        };
     }
+
+    // Cache miss → compute & store
+    return await refreshMovieStats(movieTitle);
 }
 
 module.exports = {
-    refreshStatsCache,
-    loadStatsCache,
-    getStats: (movieTitle) => statsCache[movieTitle] || null,
-    getAllStats: () => statsCache
+    refreshMovieStats,
+    getMovieStats
 };
