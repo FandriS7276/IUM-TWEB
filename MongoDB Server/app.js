@@ -83,6 +83,30 @@ app.use((req, res, next) => {
   });
 });
 
+// Chat implementation
+// app.js or server.js
+const { Server } = require('socket.io');
+const io = new Server(server, { cors: { origin: "*" } }); // adjust cors later
+
+io.on('connection', (socket) => {
+  console.log('User connected:', socket.id);
+
+  // Join movie room
+  socket.on('joinMovie', (movieTitle) => {
+    socket.join(`movie-${movieTitle}`);
+    console.log(`${socket.id} joined movie-${movieTitle}`);
+  });
+
+  // Send chat message
+  socket.on('chatMessage', ({ movieTitle, message, user }) => {
+    io.to(`movie-${movieTitle}`).emit('chatMessage', { user, message, timestamp: new Date() });
+  });
+
+  socket.on('disconnect', () => {
+    console.log('User disconnected:', socket.id);
+  });
+});
+
 // Database connection
 const dbConnect = require('./database/dbConnect');
 

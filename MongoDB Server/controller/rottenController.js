@@ -1,6 +1,6 @@
 const rottenReview =require('../schema/rottenSchema')
 
-//Get all rotten tomatoes
+//Get all reviews
 exports.getAllReviews = async (req,res) => {
     try{
         // Get page & limit from URL query (?page=2&limit=50), default to page 1, 100 per page
@@ -58,11 +58,84 @@ exports.getAllReviews = async (req,res) => {
     }
 }
 
-// Variable to cache Oscar data in memory
-let oscarCache = null;
+const {getSnubbedTitles} = require('../database/snubbedCache');
+const {getAllStats} = require('../database/statsCache');
 
 //Shows the most loved movies that have not won or been nominated for an oscar
 exports.getSnubbedMovies = async (req, res) => {
+    try {
+        const page = Number(req.query.page) || 1;
+        const limit = Math.min(Number(req.query.limit) || 100, 500);
+        const skip = (page - 1) * limit;
+        if (page < 1 || isNaN(page) || limit < 1 || isNaN(limit) || limit > 500) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid pagination parameters: page must be >= 1, limit must be between 1 and 500'
+            });
+        }
+
+        const titles = getSnubbedTitles();
+
+        if (titles.length === 0) {
+            return res.status(200).json({
+                success: true,
+                data: [],
+                pagination: {
+                    totalDocs: 0,
+                    currentPage: 1,
+                    totalPages: 0,
+                    hasNext: false,
+                    hasPrev: false,
+                    perPage: limit
+                },
+                metadata: {
+                    fetchedAt: new Date().toISOString(),
+                    resultCount: 0,
+                    message: 'No snubbed movies found in cache'
+                }
+            });
+        }
+        
+        const allStats = getAllStats();
+
+        const enriched = titles
+            .map(title => allStats[title])
+            .filter(stat => stat !== null) // Filter out any titles that don't have stats (e.g., no reviews at all)
+            .sort((a, b) => b.freshCount - a.freshCount); // Sort by freshCount descending (most loved first)
+
+        const paginated = enriched.slice(skip, skip + limit);
+
+        res.status(200).json({
+            success: true,
+            data: paginated,
+            pagination: {
+                totalDocs: enriched.length,
+                currentPage: page,
+                totalPages: Math.ceil(snubbedCache.length / limit),
+                hasNext: page * limit < snubbedCache.length,
+                hasPrev: page > 1,
+                perPage: limit
+            },
+            metadata: {
+                fetchedAt: new Date().toISOString(),
+                resultCount: paginated.length,
+                message: 'Snubbed movies retrieved from cache',
+                appliedFilters: { oscar: false, sortedBy: 'freshCount desc' }
+            }
+        });
+    }
+    catch (err) {
+        console.error('Error fetching snubbed movies:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: process.env.NODE_ENV === 'development' ? err.message : undefined
+        });
+    }
+};
+
+//Dynamic filtering for specific movies by review type or title
+exports.getReviewsByType = async (req, res) => {
     try {
         const page = Number(req.query.page) || 1;
         const limit = Math.min(Number(req.query.limit) || 100, 500);
@@ -75,18 +148,15 @@ exports.getSnubbedMovies = async (req, res) => {
             });
         }
 
-        // Cache Oscar film titles in memory for quick lookup (only if not already cached)
-        if (!oscarCache) {
-            console.log('Loading Oscar data into cache...');
-            oscarCache = await oscar.distinct('film'); // Load just the film titles into cache for quick lookup
-            console.log(`Oscar cache loaded with ${oscarCache.length} records.`);
+        const { title, type } = req.query; // type can only be 'Fresh' o 'Rotten'
+        const filter = {};
+        if (title) filter.movie_title = new RegExp(title, 'i')
+        if (type) {
+            if (!['Fresh', 'Rotten'].includes(type)) {
+                    return res.status(400).json({ success: false, message: 'Invalid review_type' });
+            }
+            filter.review_type = type;
         }
-
-        const pipeline = [
-            // Filter for fresh reviews
-            { $match: { review_type: 'Fresh' } },
-            // Fast filter thanks to movie_title index
-            { $match: { movie_title: { $nin: oscarCache } } },
             // Sort by review date (newest first)
             { $sort: { review_date: -1 } },
 

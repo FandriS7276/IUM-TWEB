@@ -14,3 +14,6 @@ npm install express-rate-limit
 npm install eslint --save-dev
 npx eslint --init
 
+
+# using vite 8 beta for react.jsx templating
+npm create vite@latest < folder-name > -- --template react
