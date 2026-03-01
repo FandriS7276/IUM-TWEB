@@ -3,10 +3,6 @@ const client = require('../database/redisClient');
 // Prefix for all movie stats keys (helps organize and avoid collisions)
 const STATS_PREFIX = 'movie:stats:';
 
-// How long each movie's stats live in Redis before auto-expiring (1 hour = 3600 seconds)
-const STATS_TTL = 3600;
-
-
 /*
  * Refreshes stats for ONE specific movie. Called on cache miss (when we ask for a movie that
  * ain't in Redis yet). Runs a small aggregate query only on that movie's reviews — very fast.
@@ -54,9 +50,6 @@ async function refreshMovieStats(movieTitle) {
     const key = `${STATS_PREFIX}${movieTitle}`;
     // hSet stores object fields as hash fields
     await client.hSet(key, stats);
-    // Set an expiration time on this key so it doesn't live forever (cache eviction after 1 hour)
-    await client.expire(key, STATS_TTL);
-
     return stats;
 }
 
