@@ -46,14 +46,14 @@ exports.getAllReviews = async (req,res) => {
         });
     }
     catch (err) {
-    console.error('Error fetching Rotten reviews:', err);
-    res.status(500).json({
-        success: false,
-        message: 'Internal server error',
-        // Checks if app is running in "development" mode
-        // If yes → send the real error message (helps debugging)
-        // If no (production) → hide the error details (security: don't leak stack traces/database paths to users/hackers)
-        error: process.env.NODE_ENV === 'development' ? err.message : undefined
+        console.error('Error fetching Rotten reviews:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            // Checks if app is running in "development" mode
+            // If yes → send the real error message (helps debugging)
+            // If no (production) → hide the error details (security: don't leak stack traces/database paths to users/hackers)
+            error: process.env.NODE_ENV === 'development' ? err.message : undefined
         });
     }
 }

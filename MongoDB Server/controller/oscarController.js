@@ -1,4 +1,4 @@
-const oscar =require('../schema/oscarSchema')
+const oscar = require('../schema/oscarSchema')
 
 //Get all oscars awards
 exports.getAllOscars = async (req, res) => {
@@ -17,7 +17,7 @@ exports.getAllOscars = async (req, res) => {
             });
         }
         // This is the skip value: how many docs to IGNORE before starting results
-        // Formula: (current page - 1) × items per page
+        // Formula: (current page - 1) x items per page
         // page=1 → skip=0    page=2 → skip=100    page=3 → skip=200 etc.
         const skip = (page - 1) * limit;
 
@@ -61,6 +61,7 @@ exports.getAllOscars = async (req, res) => {
 }
 };
 
+// TODO
 exports.neverWinningNominees
 
 
@@ -102,7 +103,7 @@ exports.getSnubbedMovies = async (req, res) => {
                 }
             });
         }
-        
+
         const allStats = await getAllStats(); // Get stats for all movies from Redis (or compute if not cached)
 
         // Enrich the titles with their stats (freshCount, tomatometer, etc.) and sort by freshCount desc
@@ -144,57 +145,57 @@ exports.getSnubbedMovies = async (req, res) => {
 
 //Movies that have won an oscar but have rotten reviews
 exports.getControversialOscarWinners = async (req, res) => {
-try {
-    const controversial = await oscar.aggregate([
-        // Only winners first (cheap, fast filter)
-        { $match: { winner: true } },
+    try {
+        const controversial = await oscar.aggregate([
+            // Only winners first (cheap, fast filter)
+            { $match: { winner: true } },
 
-        // Join with rotten reviews based on film title (case-insensitive)
-        {
-        $lookup: {
-                from: "rottenCollection",                    // ← use real collection name
-                let: { filmTitle: { $toLower: "$film" } },   // Normalize case
-                pipeline: [
-                    {
-                    $match: {
-                        // $expr lets us use aggregation expressions (like $toLower, math, comparisons) inside a $match stage.
-                        // { $eq: [ left, right ] } checks if left == right (equality).
-                        $expr: { $eq: [{ $toLower: "$movie_title" }, "$$filmTitle"] }
+            // Join with rotten reviews based on film title (case-insensitive)
+            {
+                $lookup: {
+                    from: "rottenCollection",                    // ← use real collection name
+                    let: { filmTitle: { $toLower: "$film" } },   // Normalize case
+                    pipeline: [
+                        {
+                        $match: {
+                            // $expr lets us use aggregation expressions (like $toLower, math, comparisons) inside a $match stage.
+                            // { $eq: [ left, right ] } checks if left == right (equality).
+                            $expr: { $eq: [{ $toLower: "$movie_title" }, "$$filmTitle"] }
+                            }
+                        },
+                        { $match: { review_type: "Rotten" } },     // Only keep rotten ones
+                        { $limit: 5 }                              // Optional: don't bring too many
+                    ],
+                    as: "rotten_reviews"
+                }
+            },
+
+            // Only keep winners that have at least one rotten review (controversial)
+            { $match: { "rotten_reviews.0": { $exists: true } } },
+
+            // Optional: sort by number of rotten reviews (most controversial first)
+            { $addFields: { rotten_count: { $size: "$rotten_reviews" } } },
+            { $sort: { rotten_count: -1 } },
+
+            // Optional: limit to top 20 most controversial winners (adjust as needed)
+            { $limit: 20 },
+
+            // Optional projection - clean output
+            {
+                $project: {
+                    year: "$year_film",
+                    category: 1,
+                    film: 1,
+                    winner: 1,
+                    rotten_reviews: {
+                        $map: {
+                            input: "$rotten_reviews",
+                            as: "r",
+                            in: { title: "$$r.movie_title", score: "$$r.review_score", content: "$$r.review_content" }
                         }
-                    },
-                    { $match: { review_type: "Rotten" } },     // Only keep rotten ones
-                    { $limit: 5 }                              // Optional: don't bring too many
-                ],
-                as: "rotten_reviews"
-            }
-        },
-
-        // Only keep winners that have at least one rotten review (controversial)
-        { $match: { "rotten_reviews.0": { $exists: true } } },
-
-        // Optional: sort by number of rotten reviews (most controversial first)
-        { $addFields: { rotten_count: { $size: "$rotten_reviews" } } },
-        { $sort: { rotten_count: -1 } },
-
-        // Optional: limit to top 20 most controversial winners (adjust as needed)
-        { $limit: 20 },
-
-        // Optional projection – clean output
-        {
-        $project: {
-            year: "$year_film",
-            category: 1,
-            film: 1,
-            winner: 1,
-            rotten_reviews: {
-                $map: {
-                    input: "$rotten_reviews",
-                    as: "r",
-                    in: { title: "$$r.movie_title", score: "$$r.review_score", content: "$$r.review_content" }
+                    }
                 }
             }
-        }
-    }
         ]);
         res.json({
             success: true,
@@ -202,8 +203,8 @@ try {
             metadata: {
                 fetchedAt: new Date().toISOString(),
                 resultCount: controversial.length
-                }
-            });
+            }
+        });
     }
     catch (err) {
         console.error('Error fetching controversial Oscar winners:', err);
@@ -211,6 +212,6 @@ try {
             success: false,
             message: 'Failed to find controversial Oscar-winning movies',
             error: err.message
-            });
+        });
     }
 };
