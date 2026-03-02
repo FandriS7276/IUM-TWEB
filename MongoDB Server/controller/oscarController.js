@@ -1,5 +1,7 @@
 const oscar = require('../schema/oscarSchema')
 
+// TODO - refractor using /utils
+
 //Get all oscars awards
 exports.getAllOscars = async (req, res) => {
     try {
@@ -57,14 +59,60 @@ exports.getAllOscars = async (req, res) => {
             // If yes → send the real error message (helps debugging)
             // If no (production) → hide the error details (security: don't leak stack traces/database paths to users/hackers)
             // error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-}
+        });
+    }
 };
 
-// TODO
-exports.neverWinningNominees
+// neverWinningNominees
+exports.getNominatedMovies = async (req, res) => {
+    try {
+        const page = Number(req.query.page) || 1;
+        const limit = Math.min(Number(req.query.limit) || 100, 500);
+        const skip = (page - 1) * limit;
+        if (page < 1 || isNaN(page) || limit < 1 || isNaN(limit) || limit > 500) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid pagination parameters: page must be >= 1, limit must be between 1 and 500'
+            });
+        }
 
+        const titles = await getNominatedTitles(); // Get all nominated-but-not-winning movie titles from Redis set
 
+        if (titles.length === 0) {
+            return res.status(200).json({
+                success: true,
+                data: [],
+                pagination: {
+                    totalDocs: 0,
+                    currentPage: 1,
+                    totalPages: 0,
+                    hasNext: false,
+                    hasPrev: false,
+                    perPage: limit
+                },
+                metadata: {
+                    fetchedAt: new Date().toISOString(),
+                    resultCount: 0,
+                }
+            });
+        }
+
+        const allStats = await getAllStats(); // Get stats for all movies from Redis (or compute if not cached)
+
+        const  enriched = titles
+            .map(title => allStats[title]) // Enrich the titles with their stats (freshCount, tomatometer, etc.)
+            .filter(stat => stat !== null) // Filter out any titles that didn't have stats (shouldn't happen if cache is consistent)
+            .sort((a, b) => b.freshCount - a.freshCount); // Sort by freshCount desc (most loved first)
+    }
+    catch (err) {
+        console.error('Error fetching nominated movies:', err);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: process.env.NODE_ENV === 'development' ? err.message : undefined
+        });
+    }
+};
 
 const { getSnubbedTitles } = require('../services/snubbedCache');
 const { getAllStats } = require('../services/statsCache');

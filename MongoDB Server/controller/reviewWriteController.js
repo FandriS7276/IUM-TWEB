@@ -3,6 +3,8 @@ const rateLimit = require('express-rate-limit');
 const rottenReview = require('../schema/rottenSchema');
 const client = require('../database/redisClient');
 
+// TODO add update, delete, like and report review
+
 // Auth middleware
 const requireAuth = (req, res, next) => {
     if (!req.user)

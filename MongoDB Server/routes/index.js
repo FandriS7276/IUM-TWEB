@@ -7,17 +7,16 @@ const reviewWriteController = require('../controller/reviewWriteController');
 // Oscar endpoints
 router.get('/awards/oscar', oscarController.getAllOscars);
 router.get('/awards/controversial-winners', oscarController.getControversialOscarWinners);
+router.get('/awards/never-winning-nominees', oscarController.getMostNominatedMovies);
 
 // Rotten Tomatoes endpoints
-router.get('/reviews', reviewReadController.getAllReviews);
-router.get('/reviews/snubbed', reviewReadController.getSnubbedMovies);
-router.get('/reviews/by-type', reviewReadController.getReviewsByType);
-router.get('/reviews/movie/:movieTitle', reviewReadController.getReviewsByMovie);
-router.get('/reviews/movie/:movieTitle/stats', reviewReadController.getMovieReviewStats);
+router.get('/reviews', reviewReadController.getReviews);
 
 // Review creation endpoint
-router.post('/reviews', requireAuth, writeLimiter, validateReview, reviewWriteController.createReview);
-router.post('/reviews/:id/like', requireAuth, writeLimiter, reviewWriteController.likeReview);
-router.post('/reviews/:id/report', requireAuth, writeLimiter, reviewWriteController.reportReview);
+router.post('/reviews', reviewWriteController.createReview);
+router.put('/reviews/:id', reviewWriteController.updateReview);
+router.delete('/reviews/:id', reviewWriteController.deleteReview);
+router.post('/reviews/:id/like', reviewWriteController.likeReview);
+router.post('/reviews/:id/report', reviewWriteController.reportReview)
 
 module.exports = router;
