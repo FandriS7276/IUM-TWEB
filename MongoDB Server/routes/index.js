@@ -10,8 +10,8 @@ router.get('/awards/controversial-winners', oscarController.getControversialOsca
 
 // Rotten Tomatoes endpoints
 router.get('/reviews', reviewReadController.getAllReviews);
-router.get('/snubbed-movies', reviewReadController.getSnubbedMovies);
-router.get('/reviews-by-type', reviewReadController.getReviewsByType);
+router.get('/reviews/snubbed', reviewReadController.getSnubbedMovies);
+router.get('/reviews/by-type', reviewReadController.getReviewsByType);
 router.get('/reviews/movie/:movieTitle', reviewReadController.getReviewsByMovie);
 router.get('/reviews/movie/:movieTitle/stats', reviewReadController.getMovieReviewStats);
 

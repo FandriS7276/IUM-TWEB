@@ -1,12 +1,12 @@
-const { updateMovieStats } = require('../services/statsCache');
 const { body, validationResult } = require('express-validator');
 const rateLimit = require('express-rate-limit');
-
-// TODO - Integrate middlewares
+const rottenReview = require('../schema/rottenSchema');
+const client = require('../database/redisClient');
 
 // Auth middleware
 const requireAuth = (req, res, next) => {
-    if (!req.user) return res.status(401).json({ success: false, message: 'Login required' });
+    if (!req.user)
+        return res.status(401).json({ success: false, message: 'Login required' });
     next();
 };
 
@@ -15,31 +15,56 @@ const writeLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 5, // 5 reviews max
     keyGenerator: (req) => req.user?.id || req.ip, // tie to logged-in user if possible
-    message: { success: false, message: 'Chill, too many reviews. Wait 15 min.' }
+    message: { success: false, message: 'Too many reviews. Wait 15 min.' }
 });
 
 // Reviews validation middleware
 const validateReview = [
     body('movie_title').trim().notEmpty().escape(),
     body('review_type').isIn(['Fresh', 'Rotten']),
-    body('review_content').trim().isLength({ min: 10, max: 2000 }).escape(),
+    body('review_content').trim().isLength({ min: 5, max: 2000 }).escape(),
     (req, res, next) => {
         const errors = validationResult(req);
-        if (!errors.isEmpty()) return res.status(400).json({ success: false, errors: errors.array() });
+        if (!errors.isEmpty()){
+            return res.status(400).json({ success: false, errors: errors.array() });
+        }
         next();
     }
 ];
 
+// POST /api/reviews - create review
+router.post('/',
+    requireAuth,          // 1. Must be logged in
+    writeLimiter,         // 2. Rate limit
+    validateReview,       // 3. Validate input
+    createReview          // 4. Actual logic
+);
+
+// POST /api/reviews/:id/like - like a review (stub)
+router.post('/:id/like',
+    requireAuth,
+    writeLimiter,
+    likeReview
+);
+
+// POST /api/reviews/:id/report - report a review (stub)
+router.post('/:id/report',
+    requireAuth,
+    writeLimiter,
+    reportReview
+);
+
 // Review creation endpoint
 exports.createReview = async (req, res) => {
     try {
+
         // 1. Validation + auth already in middleware (good)
-        
         const {
             movie_title,
             review_type,
             top_critic = false,
-            // ... other fields
+            review_content,
+            review_score
         } = req.body;
 
         // 2. Save review to Mongo
@@ -47,7 +72,10 @@ exports.createReview = async (req, res) => {
             movie_title,
             review_type,
             top_critic,
-            // ... rest
+            review_content,
+            review_score,
+            user_id: req.user.id, // tie review to user
+            review_date: new Date()
         });
         await newReview.save();
 
@@ -60,28 +88,32 @@ exports.createReview = async (req, res) => {
             .hIncrBy(key, top_critic && review_type === 'Fresh' ? 'topCriticFreshCount' : 'dummy', 0) // dummy for conditional
             .exec();
 
-        // 4. Optional: update tomatometer live (if you want instant %)
-        // Fetch current counters
+        // 4. Update tomatometer live
         const current = await client.hGetAll(key);
         const total = Number(current.totalReviews || 1);
         const fresh = Number(current.freshCount || 0);
         const tomatometer = total > 0 ? (fresh / total) * 100 : 0;
         await client.hSet(key, 'tomatometer', tomatometer.toFixed(1));
 
-        // 5. Optional: touch TTL if you want to keep it alive longer on activity
-        // await client.expire(key, 3600);
-
-        // 6. Optional: add to recent activity for background refresh
-        // await client.sAdd('recent:activity', movie_title);
-
         res.status(201).json({
             success: true,
             message: 'Review created',
             data: newReview
         });
-    } 
+    }
     catch (err) {
         console.error('Error creating review:', err);
         res.status(500).json({ success: false, message: 'Failed to create review' });
     }
 };
+
+exports.reportReview = async (req, res) => {
+    try {
+        const {review_id} = req.params;
+        res.status(200).json({ success: true, message: `Review ${review_id} reported` });
+    }
+    catch (err) {
+        console.error('Error reporting review:', err);
+        res.status(500).json({ success: false, message: 'Failed to report review' });
+    }
+}
