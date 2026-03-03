@@ -5,9 +5,10 @@
  * @param {number} [maxLimit=200] - hard max to prevent abuse
  * @returns {{ page: number, limit: number, skip: number }}
  */
-function extractPagination(query, defaultLimit = 20, maxLimit = 200) {
-    const rawPage  = Number(query.page);
-    const rawLimit = Number(query.limit);
+function extractPagination(query, defaultLimit = 20, maxLimit = 500) {
+    // Applying defaults
+    const rawPage = query.page !== undefined ? Number(query.page) : 1;
+    const rawLimit = query.limit !== undefined ? Number(query.limit) : defaultLimit;
 
     // Early validation - fail fast before any math
     if (
@@ -23,9 +24,10 @@ function extractPagination(query, defaultLimit = 20, maxLimit = 200) {
         error.status = 400;
         throw error;
     }
+
     // Safe math now that we know inputs are valid numbers
-    const page  = Math.max(rawPage, 1);
-    const limit = Math.min(rawLimit, maxLimit);
+    const page  = Math.floor(rawPage);
+    const limit = Math.floor(rawLimit);
     const skip  = (page - 1) * limit;
 
     return { page, limit, skip };
@@ -41,16 +43,16 @@ function emptyPaginatedResponse(limit = 20) {
         success: true,
         data: [],
         pagination: {
-        totalDocs: 0,
-        currentPage: 1,
-        totalPages: 0,
-        hasNext: false,
-        hasPrev: false,
-        perPage: limit
+            totalDocs: 0,
+            currentPage: 1,
+            totalPages: 0,
+            hasNext: false,
+            hasPrev: false,
+            perPage: limit
         },
         metadata: {
-        fetchedAt: new Date().toISOString(),
-        resultCount: 0
+            fetchedAt: new Date().toISOString(),
+            resultCount: 0
         }
     };
     }
@@ -69,17 +71,17 @@ function emptyPaginatedResponse(limit = 20) {
         success: true,
         data,
         pagination: {
-        totalDocs,
-        currentPage: page,
-        totalPages: Math.ceil(totalDocs / limit),
-        hasNext: page * limit < totalDocs,
-        hasPrev: page > 1,
-        perPage: limit
+            totalDocs,
+            currentPage: page,
+            totalPages: Math.ceil(totalDocs / limit),
+            hasNext: page * limit < totalDocs,
+            hasPrev: page > 1,
+            perPage: limit
         },
         metadata: {
-        fetchedAt: new Date().toISOString(),
-        resultCount: data.length,
-        ...extraMetadata
+            fetchedAt: new Date().toISOString(),
+            resultCount: data.length,
+            ...extraMetadata
         }
     };
 }
