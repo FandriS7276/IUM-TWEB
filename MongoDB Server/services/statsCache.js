@@ -38,6 +38,7 @@ async function refreshMovieStats(movieTitle) {
             }
         }
     ];
+
     // Run the aggregation on the RottenReview collection to return an array with a single document containing all the stats for this movie
     const result = await rottenReview.aggregate(pipeline);
     const stats = result[0] || {totalReviews: 0,
@@ -46,8 +47,10 @@ async function refreshMovieStats(movieTitle) {
                                 tomatometer: 0,
                                 topCriticFreshCount: 0,
                                 latestReview: null };
+                                
     // Store the stats in Redis as a hash (key = movie:stats:{movieTitle}, fields = stat names, values = stat values)
     const key = `${STATS_PREFIX}${movieTitle}`;
+
     // hSet stores object fields as hash fields
     await client.hSet(key, stats);
     return stats;
@@ -59,7 +62,7 @@ async function getMovieStats(movieTitle) {
     const key = `${STATS_PREFIX}${movieTitle}`;
     const cached = await client.hGetAll(key); // get all fields from hash
 
-    // Condition in case we got
+    // Condition in case we got the data
     if (Object.keys(cached).length > 0) {
         return {
             totalReviews: Number(cached.totalReviews),
@@ -70,7 +73,7 @@ async function getMovieStats(movieTitle) {
             latestReview: cached.latestReview || null
         };
     }
-
+    
     // Cache miss → compute & store
     return await refreshMovieStats(movieTitle);
 }

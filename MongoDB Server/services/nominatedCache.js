@@ -10,22 +10,23 @@ async function refreshNominatedCache() {
     console.log('Refreshing nominated-but-not-winning cache...');
 
     try {
-        // All movies that were ever nominated (have any oscar entry)
-        const nominatedMovies = await oscarCollection.distinct('film');
-
-        // Movies that actually won at least once
+        // Get all movies that won at least once
         const winningMovies = await oscarCollection.distinct('film', { winner: true });
 
-        // Nominated but never won
-        const nominatedButNotWinning = nominatedMovies.filter(title => !winningMovies.includes(title));
+        // All movies that were ever nominated (regardless of win status)
+        const nominatedMovies = await oscarCollection.distinct('film');
+
+        // Filtering nominations but NOT winning movies
+        const nomitatedOnly = nominatedMovies.filter(title => !winningMovies.includes(title));
 
         // Store as simple set
         await client.del(NOMINATED_KEY);
-        if (nominatedButNotWinning.length > 0) {
-            await client.sAdd(NOMINATED_KEY, nominatedButNotWinning);
+        if (nomitatedOnly.length > 0) {
+            await client.sAdd(NOMINATED_KEY, nomitatedOnly);
         }
 
-        console.log(`Nominated cache refreshed: ${nominatedButNotWinning.length} movies`);
+        console.log(`Nominated cache refreshed: ${nomitatedOnly.length} movies`);
+        return nominatedOnly;
     }
     catch (err) {
         console.error('Error refreshing nominated cache:', err);
@@ -34,7 +35,17 @@ async function refreshNominatedCache() {
 
 // Gets all nominated-but-not-winning movies in an unsorted array
 async function getNominatedTitles() {
-    return await client.sMembers(NOMINATED_KEY); // Get all members of the set
+    try {
+        const titles = await client.sMembers(NOMINATED_KEY);
+        if (titles.length === 0) {
+            return await refreshNominatedCache();
+        }
+        return titles;
+    }
+    catch (err) {
+        console.error('Error getting nominated titles:', err.message);
+        return []; // Return empty array so controller can show empty state
+    }
 }
 
 module.exports = {
