@@ -1,6 +1,6 @@
 const rottenReview =require('../schema/rottenSchema')
 const { extractPagination, buildPaginatedResponse, emptyPaginatedResponse } = require('../utils/pagination');
-
+const { handleError } = require('../utils/handler');
 //Get all reviews or filtered
 exports.getReviews = async (req,res) => {
     try{
@@ -80,14 +80,6 @@ exports.getReviews = async (req,res) => {
         if (err.status === 400)
             return res.status(400).json({ success: false, message: err.message });
         
-        console.error('Error fetching Rotten reviews:', err);
-        res.status(500).json({
-            success: false,
-            message: 'Internal server error',
-            // Checks if app is running in "development" mode
-            // If yes → send the real error message (helps debugging)
-            // If no (production) → hide the error details (security: don't leak stack traces/database paths to users/hackers)
-            error: process.env.NODE_ENV === 'development' ? err.message : undefined
-            });
+        handleError(res, err, 'Failed to retrieve reviews data')
     }
 };

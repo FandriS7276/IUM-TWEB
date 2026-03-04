@@ -1,27 +1,14 @@
 const oscar = require('../schema/oscarSchema')
+const { extractPagination, buildPaginatedResponse, emptyPaginatedResponse } = require('../utils/pagination');
+const { enrichAndSortByFreshness } = require('../utils/enrichment');
+const { handleError } = require('../utils/handler')
 
 // TODO - refractor using /utils
 
 //Get all oscars awards
 exports.getAllOscars = async (req, res) => {
     try {
-        // Get page & limit from URL query (?page=2&limit=50), default to page 1, 100 per page
-        const page  = req.query.page  ? Number(req.query.page)  : 1;    // Default to page 1 if not specified
-        const limit = req.query.limit ? Number(req.query.limit) : 100;  // Default to 100 reviews per page if not specified,
-                                                                        // can be adjusted by client with ?limit=50 for example
-                                                                        // (max 500 to prevent abuse)
-
-        // Basic validation for page and limit
-        if (page < 1 || isNaN(page) || limit < 1 || isNaN(limit) || limit > 500) {
-            return res.status(400).json({
-            success: false,
-            message: 'Invalid pagination parameters: page must be >= 1, limit must be between 1 and 500'
-            });
-        }
-        // This is the skip value: how many docs to IGNORE before starting results
-        // Formula: (current page - 1) x items per page
-        // page=1 → skip=0    page=2 → skip=100    page=3 → skip=200 etc.
-        const skip = (page - 1) * limit;
+        const { page, limit, skip } = extractPagination(req.query);
 
         const oscars = await oscar
             .find()                             // all Oscars (add filters later if needed)
@@ -32,49 +19,17 @@ exports.getAllOscars = async (req, res) => {
         // Bonus: total count for frontend to know total pages
         const total = await oscar.countDocuments();
 
-        res.json({
-            success: true,
-            data: oscars,
-            pagination: {
-                totalDocs: total,
-                currentPage: page,
-                totalPages: Math.ceil(total / limit),
-                hasNext: page * limit < total,
-                hasPrev: page > 1
-            },
-            metadata: {
-                fetchedAt: new Date().toISOString(),
-                resultCount: oscars.length
-                }
-        });
+        res.json(buildPaginatedResponse(oscars, total, page, limit))
     }
     catch (err) {
-        console.error('Error in fetching Oscars data:', err);   // ← helps you spot issues in logs
-        res.status(500).json({
-            success: false,
-            message: 'Failed to retrieve Oscars data',
-            error: err.message                          // ← always send for now (safe while developing)
-            
-            // Checks if app is running in "development" mode
-            // If yes → send the real error message (helps debugging)
-            // If no (production) → hide the error details (security: don't leak stack traces/database paths to users/hackers)
-            // error: process.env.NODE_ENV === 'development' ? err.message : undefined
-        });
+        handleError(res, err, 'Failed to retrieve Oscars data')
     }
 };
 
 // neverWinningNominees
 exports.getNominatedMovies = async (req, res) => {
     try {
-        const page = Number(req.query.page) || 1;
-        const limit = Math.min(Number(req.query.limit) || 100, 500);
-        const skip = (page - 1) * limit;
-        if (page < 1 || isNaN(page) || limit < 1 || isNaN(limit) || limit > 500) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid pagination parameters: page must be >= 1, limit must be between 1 and 500'
-            });
-        }
+        const { page, limit, skip } = extractPagination(req.query);
 
         const titles = await getNominatedTitles(); // Get all nominated-but-not-winning movie titles from Redis set
 
@@ -120,15 +75,7 @@ const { getAllStats } = require('../services/statsCache');
 //Shows the most loved movies that have not won an oscar
 exports.getSnubbedMovies = async (req, res) => {
     try {
-        const page = Number(req.query.page) || 1;
-        const limit = Math.min(Number(req.query.limit) || 100, 500);
-        const skip = (page - 1) * limit;
-        if (page < 1 || isNaN(page) || limit < 1 || isNaN(limit) || limit > 500) {
-            return res.status(400).json({
-                success: false,
-                message: 'Invalid pagination parameters: page must be >= 1, limit must be between 1 and 500'
-            });
-        }
+        const { page, limit, skip } = extractPagination(req.query);
 
         const titles = await getSnubbedTitles(); // Get all snubbed movie titles from Redis set
 
@@ -194,6 +141,8 @@ exports.getSnubbedMovies = async (req, res) => {
 //Movies that have won an oscar but have rotten reviews
 exports.getControversialOscarWinners = async (req, res) => {
     try {
+        const { page, limit, skip } = extractPagination(req.query);
+        
         const controversial = await oscar.aggregate([
             // Only winners first (cheap, fast filter)
             { $match: { winner: true } },
