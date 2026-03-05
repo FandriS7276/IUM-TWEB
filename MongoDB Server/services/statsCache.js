@@ -3,6 +3,9 @@ const client = require('../database/redisClient');
 // Prefix for all movie stats keys (helps organize and avoid collisions)
 const STATS_PREFIX = 'movie:stats:';
 
+// Lock refreshes in case of a cold start / empty cache so high traffic of a popular movie does NOT aggregate on multiple requests at the same time
+const REFRESH_LOCK_TTL = 10;
+
 /*
  * Refreshes stats for ONE specific movie. Called on cache miss (when we ask for a movie that
  * ain't in Redis yet). Runs a small aggregate query only on that movie's reviews — very fast.
