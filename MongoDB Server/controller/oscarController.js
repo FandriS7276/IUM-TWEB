@@ -1,31 +1,75 @@
 const oscar = require('../schema/oscarSchema')
 const { extractPagination, buildPaginatedResponse, emptyPaginatedResponse } = require('../utils/pagination');
-const { enrichAndSortByFreshness } = require('../utils/enrichment');
+const { getMovieStats } = require('../services/statsCache');
 const { handleError } = require('../utils/handler')
 
-// TODO - refractor using /utils
 
-//Get all oscars awards
+//Get all oscars awards or filtered
 exports.getAllOscars = async (req, res) => {
     try {
         const { page, limit, skip } = extractPagination(req.query);
 
+        // Build safe filter from query params
+        const { year_film, category, film, winner } = req.query;
+        const filter = {};
+        let sort = {review_date: -1}; // Default
+
+        // Validate and add filters
+        if (year_film) {
+            const year = Number(year_film);
+            if (isNaN(year) || year < 1929 || year > new Date().getFullYear() + 10) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid year_film: must be a valid year'
+                });
+            }
+            filter.year_film = year;
+        }
+        
+        if (category) {
+            filter.category = {
+                $regex: escapeRegex(category.trim()),
+                $options: 'i'
+            };
+        }
+        
+        if (film) {
+            filter.film = buildTitleFilter(film);
+        }
+
+        if (winner !== undefined) {
+            const isWinner = winner === 'true' || winner === true;
+            filter.winner = isWinner;
+        }
+
         const oscars = await oscar
-            .find()                             // all Oscars (add filters later if needed)
+            .find(filter)                       // all Oscars or filtered
             .sort({ year_film: -1 })            // newest years first (good for movies)
             .skip(skip)                         // ← skips the calculated number
             .limit(limit);                      // ← caps how many we return
 
         // Bonus: total count for frontend to know total pages
-        const total = await oscar.countDocuments();
+        const total = await Oscar.countDocuments(filter);
 
-        res.json(buildPaginatedResponse(oscars, total, page, limit))
+        // Lazy stats only for the films in this page (fast)
+        const uniqueFilms = [...new Set(awards.map(a => a.film))];
+        const statsMap = {};
+        await Promise.all(uniqueFilms.map(async title => {
+            statsMap[title] = await getMovieStats(title);
+        }));
+
+        const data = awards.map(award => ({
+            ...award,
+            stats: statsMap[award.film] || { tomatometer: 0, freshCount: 0, totalReviews: 0 }
+        }));
+
+        res.json(buildPaginatedResponse(data, total, page, limit));
     }
     catch (err) {
-        handleError(res, err, 'Failed to retrieve Oscars data')
+        handleError(res, err, 'Failed to retrieve Oscars')
     }
 };
-
+/*
 // neverWinningNominees
 exports.getNominatedMovies = async (req, res) => {
     try {
@@ -60,12 +104,7 @@ exports.getNominatedMovies = async (req, res) => {
             .sort((a, b) => b.freshCount - a.freshCount); // Sort by freshCount desc (most loved first)
     }
     catch (err) {
-        console.error('Error fetching nominated movies:', err);
-        res.status(500).json({
-            success: false,
-            message: 'Internal server error',
-            error: process.env.NODE_ENV === 'development' ? err.message : undefined
-        });
+        handleError(res, err, 'Failed to nominated movies')
     }
 };
 
@@ -129,12 +168,7 @@ exports.getSnubbedMovies = async (req, res) => {
         });
     }
     catch (err) {
-        console.error('Error fetching snubbed movies:', err);
-        res.status(500).json({
-            success: false,
-            message: 'Internal server error',
-            error: process.env.NODE_ENV === 'development' ? err.message : undefined
-        });
+        handleError(res, err, 'Failed to retrieve snubbed movies')
     }
 };
 
@@ -142,7 +176,7 @@ exports.getSnubbedMovies = async (req, res) => {
 exports.getControversialOscarWinners = async (req, res) => {
     try {
         const { page, limit, skip } = extractPagination(req.query);
-        
+
         const controversial = await oscar.aggregate([
             // Only winners first (cheap, fast filter)
             { $match: { winner: true } },
@@ -204,11 +238,7 @@ exports.getControversialOscarWinners = async (req, res) => {
         });
     }
     catch (err) {
-        console.error('Error fetching controversial Oscar winners:', err);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to find controversial Oscar-winning movies',
-            error: err.message
-        });
+        handleError(res, err, 'Failed to retrieve controversial winners')
     }
 };
+*/
