@@ -4,6 +4,10 @@ const oscarController = require('../controller/oscarController');
 const reviewReadController = require('../controller/reviewReadController');
 const reviewWriteController = require('../controller/reviewWriteController');
 
+router.use('/reviews', require('./reviews'));
+router.use('/awards', require('./oscar'));
+router.use('/popular', require('./popular'));
+
 // Oscar endpoints
 router.get('/awards/oscar', oscarController.getAllOscars);
 router.get('/awards/controversial-winners', oscarController.getControversialOscarWinners);
