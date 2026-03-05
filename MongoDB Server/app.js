@@ -8,6 +8,40 @@ var express = require('express');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
 
+// Cron scheduler - refreshes daily and weekly caches
+const cron = require('node-cron');
+const popularity = require('./services/popularityCache');
+
+// Every day at 00:05
+cron.schedule('5 0 * * *', async () =>
+  {
+    try {
+      await popularity.refreshDailyPopularity();
+    }
+    catch (err) {
+      console.error('Daily popularity refresh failed:', err);
+    }
+  },
+  {
+    timezone: "UTC"
+  }
+);
+
+// Every Sunday at 00:05
+cron.schedule('5 0 * * 0', async () =>
+  {
+    try {
+      await popularity.refreshWeeklyPopularity();
+    }
+    catch (err) {
+      console.error('Weekly popularity refresh failed:', err);
+    }
+  },
+  {
+    timezone: "UTC"
+  }
+);
+
 // Security & performance middleware
 const helmet = require('helmet');
 const compression = require('compression');
@@ -20,7 +54,7 @@ var app = express();
 
 const http = require('http');
 // Chat connection with Socket.IO
-const { initSocket } = require('./services/socket.io');
+const { initSocket } = require('./services/socket.js');
 // Database connection
 const dbConnect = require('./database/dbConnect');
 
