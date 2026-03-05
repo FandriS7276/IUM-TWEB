@@ -1,6 +1,7 @@
 const rottenReview =require('../schema/rottenSchema')
 const { extractPagination, buildPaginatedResponse, emptyPaginatedResponse } = require('../utils/pagination');
 const { handleError } = require('../utils/handler');
+
 //Get all reviews or filtered
 exports.getReviews = async (req,res) => {
     try{
@@ -71,7 +72,7 @@ exports.getReviews = async (req,res) => {
         }
 
         // Get total count for pagination metadata
-        const total = await rottenReview.countDocuments();
+        const total = await reviews.countDocuments();
 
         // Build and send paginated response
         res.status(200).json(buildPaginatedResponse(reviews, total, page, limit, {appliedFilters:{review_type, movie_title, top_critic, from_date, to_date}, appliedSort: sort}));
