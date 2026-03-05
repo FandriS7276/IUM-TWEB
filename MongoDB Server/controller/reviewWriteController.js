@@ -34,28 +34,6 @@ const validateReview = [
     }
 ];
 
-// POST /api/reviews - create review
-router.post('/',
-    requireAuth,          // 1. Must be logged in
-    writeLimiter,         // 2. Rate limit
-    validateReview,       // 3. Validate input
-    createReview          // 4. Actual logic
-);
-
-// POST /api/reviews/:id/like - like a review (stub)
-router.post('/:id/like',
-    requireAuth,
-    writeLimiter,
-    likeReview
-);
-
-// POST /api/reviews/:id/report - report a review (stub)
-router.post('/:id/report',
-    requireAuth,
-    writeLimiter,
-    reportReview
-);
-
 // Review creation endpoint
 exports.createReview = async (req, res) => {
     try {
