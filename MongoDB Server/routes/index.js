@@ -19,4 +19,9 @@ router.delete('/reviews/:id', reviewWriteController.deleteReview);
 router.post('/reviews/:id/like', reviewWriteController.likeReview);
 router.post('/reviews/:id/report', reviewWriteController.reportReview)
 
+// TODO review tracking endpoints
+
+// Tracking endpoints
+router.get('/popular/today', trackerController.getPopularToday);
+router.get('/popular/this-week', trackerController.getPopularThisWeek);
 module.exports = router;
