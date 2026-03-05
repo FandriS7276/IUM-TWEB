@@ -1,11 +1,11 @@
-const { enrichWithStats } = require {'../services/popularityCache.js'};
+const enrichWithStats = require('../utils/enrichment.js');
 
 async function getPopularDaily(page = 1, limit = 20) {
     const start = (page - 1) * limit;
     const end   = start + limit - 1;
     const titles = await client.zRevRange(DAILY_ZSET, start, end);
     if (!titles.length)
-        console.log('Hot ZSET empty — possible cold start');
+        console.log('Hot ZSET empty - possible cold start');
     return await enrichWithStats(titles);
 }
 
