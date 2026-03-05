@@ -39,7 +39,7 @@ async function refreshSnubbedCache() {
 
 
 // Gets all snubbed movies in an unsorted array
-async function getSnubbedMovies() {
+async function getSnubbedTitles() {
     try {
         const titles = await client.sMembers(SNUBBED_KEY);
         
@@ -56,6 +56,5 @@ async function getSnubbedMovies() {
 
 module.exports = {
     refreshSnubbedCache,
-    getSnubbedMovies,
-    getSnubbedCount
+    getSnubbedTitles
 };
