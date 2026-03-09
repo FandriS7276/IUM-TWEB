@@ -1,6 +1,7 @@
 const rottenReview =require('../schema/rottenSchema')
 const { extractPagination, buildPaginatedResponse, emptyPaginatedResponse } = require('../utils/pagination');
 const { handleError } = require('../utils/handler');
+const { escapeRegex } = require('../utils/validation');
 
 //Get all reviews or filtered
 exports.getReviews = async (req,res) => {
@@ -20,7 +21,11 @@ exports.getReviews = async (req,res) => {
             }
             filter.review_type = review_type;
         }
+
+        // TODO implement movie validation from movieCache
+
         if (movie_title) {
+            filter.movie_title = escapeRegex(movie_title)
             filter.movie_title = movie_title.trim().replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'); // Escape regex special chars
             filter.movie_title = { $regex: `^${filter.movie_title}$`, $options: 'i' }; // Case-insensitive exact match
         }
