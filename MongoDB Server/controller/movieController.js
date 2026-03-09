@@ -1,4 +1,5 @@
-const enrichWithStats = require('../utils/enrichment.js');
+const client = require('../database/redisClient.js')
+const { enrichWithStats } = require('../utils/enrichment.js');
 
 async function getPopularDaily(page = 1, limit = 20) {
     const start = (page - 1) * limit;
