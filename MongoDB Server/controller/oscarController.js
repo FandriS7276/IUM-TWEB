@@ -1,6 +1,7 @@
 const oscar = require('../schema/oscarSchema')
 const { extractPagination, buildPaginatedResponse, emptyPaginatedResponse } = require('../utils/pagination');
 const { getMovieStats } = require('../services/statsCache');
+const { enrichWithStats } = require('../utils/enrichment')
 const { handleError } = require('../utils/handler')
 
 
@@ -10,9 +11,9 @@ exports.getAllOscars = async (req, res) => {
         const { page, limit, skip } = extractPagination(req.query);
 
         // Build safe filter from query params
-        const { year_film, category, film, winner } = req.query;
+        const { year_film, category, film, winner, from_date, to_date, sortBy } = req.query;
         const filter = {};
-        let sort = {review_date: -1}; // Default
+        let sort = {year_film: -1, film: 1}; // Default: newest year first, then film A-Z
 
         // Validate and add filters
         if (year_film) {
@@ -27,14 +28,28 @@ exports.getAllOscars = async (req, res) => {
         }
         
         if (category) {
-            filter.category = {
-                $regex: escapeRegex(category.trim()),
-                $options: 'i'
-            };
+        try {
+            filter.category = validateCategory(category); // throws if invalid
+        }
+        catch (err) {
+            return res.status(400).json({
+                success: false,
+                message: err.message
+            });
+        }
         }
         
+        // TODO use movie validation from movieCache
+
         if (film) {
-            filter.film = buildTitleFilter(film);
+        const cleanedFilm = film.trim();
+        if (!cleanedFilm) {
+            return res.status(400).json({ success: false, message: 'film cannot be empty' });
+        }
+        // Safe exact match (case-insensitive) – better than regex for titles
+        filter.film = { $regex: new RegExp(`^${escapeRegex(cleanedFilm)}$`, 'i') };
+        // Alternative: exact match with collation (if you have index)
+        // filter.film = cleanedFilm; // + .collation({ locale: 'en', strength: 2 })
         }
 
         if (winner !== undefined) {
@@ -42,23 +57,84 @@ exports.getAllOscars = async (req, res) => {
             filter.winner = isWinner;
         }
 
+        if (from_date || to_date) {
+            filter.year_film = {};
+            if (from_date) {
+                const from = new Number(from_date);
+                if (!isNaN(from))
+                    filter.year_film.$gte = from;
+            }
+            if (to_date) {
+                const to = new Number(to_date);
+                if (!isNaN(to))
+                    filter.year_film.$lte = to;
+            }
+            if (Object.keys(filter.year_film).length === 0) {
+                delete filter.year_film; // Remove if no valid dates
+            }
+        }
+
+        if (sortBy) {
+        const sortParts = sortBy.split(',').map(s => s.trim());
+        const validFields = {
+            'year': 'year_film',
+            'ceremony': 'year_ceremony',
+            'category': 'category',
+            'film': 'film'
+        };
+
+        const mongoSortObj = {};
+
+        for (const part of sortParts) {
+            const [fieldRaw, dir = 'desc'] = part.split('-'); // e.g. "year-desc" or "film-asc"
+            const field = validFields[fieldRaw];
+
+            if (!field) {
+            return res.status(400).json({
+                success: false,
+                message: `Invalid sort field: ${fieldRaw}. Allowed: ${Object.keys(validFields).join(', ')}`
+            });
+            }
+
+            if (!['asc', 'desc'].includes(dir.toLowerCase())) {
+            return res.status(400).json({
+                success: false,
+                message: `Invalid sort direction for ${fieldRaw}: must be asc or desc`
+            });
+            }
+
+            mongoSortObj[field] = dir.toLowerCase() === 'asc' ? 1 : -1;
+        }
+
+        sort = mongoSortObj; // override default
+        }
+
         const oscars = await oscar
             .find(filter)                       // all Oscars or filtered
             .sort({ year_film: -1 })            // newest years first (good for movies)
             .skip(skip)                         // ← skips the calculated number
-            .limit(limit);                      // ← caps how many we return
+            .limit(limit)                       // ← caps how many we return
+            .lean();                            // faster, plain object
+        
+        // Early return if nothing found
+        if (oscars.length === 0) {
+            return res.json(emptyPaginatedResponse(limit));
+        }
 
         // Bonus: total count for frontend to know total pages
-        const total = await Oscar.countDocuments(filter);
+        const total = await oscars.countDocuments(filter);
 
         // Lazy stats only for the films in this page (fast)
-        const uniqueFilms = [...new Set(awards.map(a => a.film))];
+        const uniqueFilms = [...new Set(oscars.map(a => a.film))];
+        const enrichedFilms = await enrichedWithStats(uniqueFilms);
+
         const statsMap = {};
         await Promise.all(uniqueFilms.map(async title => {
             statsMap[title] = await getMovieStats(title);
         }));
 
-        const data = awards.map(award => ({
+
+        const data = oscars.map(award => ({
             ...award,
             stats: statsMap[award.film] || { tomatometer: 0, freshCount: 0, totalReviews: 0 }
         }));
