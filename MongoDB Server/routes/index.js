@@ -1,31 +1,28 @@
 var express = require('express');
 var router = express.Router();
-const oscarController = require('../controller/oscarController');
-const reviewReadController = require('../controller/reviewReadController');
-const reviewWriteController = require('../controller/reviewWriteController');
 
+// Domain-specific routers
 router.use('/reviews', require('./reviews'));
 router.use('/awards', require('./oscar'));
 router.use('/popular', require('./popular'));
+router.use('/movies', require('./movies'));
+router.use('/user', require('./users.js'));
 
-// Oscar endpoints
-router.get('/awards/oscar', oscarController.getAllOscars);
-router.get('/awards/controversial-winners', oscarController.getControversialOscarWinners);
-router.get('/awards/never-winning-nominees', oscarController.getMostNominatedMovies);
+// Optional: root health check
+router.get('/', (req, res) => {
+    res.json({
+        success: true,
+        message: 'API is live',
+        version: '1.0',
+        endpoints: [
+        '/reviews', '/awards', '/popular', '/movies', '/user'
+        ]
+    });
+});
 
-// Rotten Tomatoes endpoints
-router.get('/reviews', reviewReadController.getReviews);
+// Optional: 404 catch-all (already in app.js, but can leave here too)
+router.use((req, res) => {
+    res.status(404).json({ success: false, message: 'Endpoint not found' });
+});
 
-// Review creation endpoint
-router.post('/reviews', reviewWriteController.createReview);
-router.put('/reviews/:id', reviewWriteController.updateReview);
-router.delete('/reviews/:id', reviewWriteController.deleteReview);
-router.post('/reviews/:id/like', reviewWriteController.likeReview);
-router.post('/reviews/:id/report', reviewWriteController.reportReview)
-
-// TODO review tracking endpoints
-
-// Tracking endpoints
-router.get('/popular/today', trackerController.getPopularToday);
-router.get('/popular/this-week', trackerController.getPopularThisWeek);
 module.exports = router;
