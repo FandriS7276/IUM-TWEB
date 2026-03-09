@@ -58,6 +58,9 @@ const { initSocket } = require('./services/socket.js');
 // Database connection
 const dbConnect = require('./database/dbConnect');
 
+// Movie title sync from other DB
+const { syncAllMovieTitles } = require('./services/movieCache');
+
 // Rate limiting: max 100 requests per 15 minutes per IP
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -131,7 +134,14 @@ initSocket(server);
 // Start server after DB connection is established
 (async () => {
   try {
-    await dbConnect();  // waits for connection to succeed or fail before starting server – prevents "server running but DB dead" scenario
+    await dbConnect();  // waits for connection to succeed or fail before starting server - prevents "server running but DB dead" scenario
+    
+    // Full movie title sync at startup
+    await syncAllMovieTitles();
+
+    // Oscar category caching
+    const { initCategoryWatcher } = require('./services/oscarCache');
+    await initCategoryWatcher();
     
     const PORT = process.env.PORT;
     app.listen(PORT, () => {
