@@ -20,9 +20,19 @@ router.get('/', (req, res) => {
     });
 });
 
-// Optional: 404 catch-all (already in app.js, but can leave here too)
-router.use((req, res) => {
-    res.status(404).json({ success: false, message: 'Endpoint not found' });
+
+// TODO .env INTERNAL_TOKEN missing
+router.post('/internal/sync-movie', async (req, res) => {
+    const auth = req.headers.authorization;
+    if (auth !== `Bearer ${process.env.INTERNAL_TOKEN}`) {
+        return res.status(403).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const { title } = req.body;
+    if (!title) return res.status(400).json({ success: false, message: 'Invalid title' });
+
+    await movieCache.addMovieTitle(title);
+    res.status(200).json({ success: true });
 });
 
 module.exports = router;
