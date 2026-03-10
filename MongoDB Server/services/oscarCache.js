@@ -66,7 +66,7 @@ async function initCategoryWatcher() {
     await loadValidCategories();
     
     // Watch for changes in oscar collection
-    const changeStream = oscar.watch([
+    const changeStream = oscarCollection.watch([
         { $match: { 'fullDocument.category': { $exists: true } } }
     ]);
     
@@ -83,11 +83,8 @@ async function initCategoryWatcher() {
     });
 }
 
-// Call in your app.js/server.js
-initCategoryWatcher();
-
-
 module.exports = {
     refreshNominatedCache,
-    getNominatedTitles
+    getNominatedTitles,
+    initCategoryWatcher
 };
