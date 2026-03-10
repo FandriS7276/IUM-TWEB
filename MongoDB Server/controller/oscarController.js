@@ -28,15 +28,15 @@ exports.getAllOscars = async (req, res) => {
         }
         
         if (category) {
-        try {
-            filter.category = validateCategory(category); // throws if invalid
-        }
-        catch (err) {
-            return res.status(400).json({
-                success: false,
-                message: err.message
-            });
-        }
+            try {
+                filter.category = validateCategory(category); // throws if invalid
+            }
+            catch (err) {
+                return res.status(400).json({
+                    success: false,
+                    message: err.message
+                });
+            }
         }
         
         // TODO use movie validation from movieCache
