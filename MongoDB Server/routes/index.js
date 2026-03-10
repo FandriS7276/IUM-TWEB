@@ -19,7 +19,7 @@ router.get('/', (req, res) => {
     });
 });
 
-
+const movieCache = require('../services/movieCache');
 // TODO .env INTERNAL_TOKEN missing
 router.post('/internal/sync-movie', async (req, res) => {
     const auth = req.headers.authorization;
