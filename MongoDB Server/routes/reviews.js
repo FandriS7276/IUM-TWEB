@@ -1,15 +1,24 @@
 const express = require('express');
 const router = express.Router();
 
-// Mount domain-specific routers
-router.use('/reviews', require('./reviews'));
-router.use('/awards', require('./oscar'));
-router.use('/popular', require('./popular'));
+const reviewRead = require('../controller/reviewReadController');
+const reviewWrite = require('../controller/reviewWriteController');
 
-// root health check
-router.get('/', (req, res) => {
-    res.json({ success: true, message: 'API is live', version: '1.0' });
-});
+// GET /reviews (list/filter)
+router.get('/', reviewRead.getReviews);
 
-module.exports = router;
+// POST /reviews (create)
+router.post('/',
+    reviewWrite.requireAuth,
+    reviewWrite.writeLimiter,
+    reviewWrite.validateReview,
+    reviewWrite.createReview
+);
+
+// TODO stubs - implement when ready
+router.put('/:id', reviewWrite.requireAuth, reviewWrite.writeLimiter, reviewWrite.updateReview);
+router.delete('/:id', reviewWrite.requireAuth, reviewWrite.writeLimiter, reviewWrite.deleteReview);
+router.post('/:id/like', reviewWrite.requireAuth, reviewWrite.writeLimiter, reviewWrite.likeReview);
+router.post('/:id/report', reviewWrite.requireAuth, reviewWrite.writeLimiter, reviewWrite.reportReview);
+
 module.exports = router;
