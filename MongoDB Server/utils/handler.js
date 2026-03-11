@@ -11,4 +11,3 @@ const handleError = (res, err, defaultMessage) => {
 };
 
 module.exports = { handleError };
-
