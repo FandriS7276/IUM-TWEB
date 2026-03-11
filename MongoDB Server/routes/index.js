@@ -22,6 +22,8 @@ router.get('/', (req, res) => {
 const movieCache = require('../services/movieCache');
 // TODO .env INTERNAL_TOKEN missing
 router.post('/internal/sync-movie', async (req, res) => {
+
+    // Private post - requires authorization
     const auth = req.headers.authorization;
     if (auth !== `Bearer ${process.env.INTERNAL_TOKEN}`) {
         return res.status(403).json({ success: false, message: 'Unauthorized' });
