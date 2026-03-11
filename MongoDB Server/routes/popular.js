@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const popularityCache = require('../services/popularityCache'); // or wherever your functions live
+const popularityCache = require('../services/popularityCache');
 
 // GET /popular/today
 router.get('/today', async (req, res) => {
