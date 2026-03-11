@@ -40,12 +40,7 @@ async function addMovieTitle(title) {
     console.log(`✅ Added new movie title "${normalized}" to Redis validation set`);
 }
 
-// Validate if a film exists (fast Redis check)
-async function isValidFilm(title) {
-    if (!title) return false;
-
-    const normalized = title.trim().toLowerCase();
-    return await client.sIsMember(ALL_MOVIES_KEY, normalized);
-}
-
-module.exports = { syncAllMovieTitles, addMovieTitle, isValidFilm };
+module.exports = {
+    syncAllMovieTitles,
+    addMovieTitle
+};
