@@ -1,6 +1,6 @@
 const client = require('../database/redisClient');
 const { getMovieStats } = require('./statsCache');
-
+const { enrichWithStats } = require('../utils/enrichment.js');
 
 const DAILY_ZSET        = 'popular:daily:zset';
 const WEEKLY_ZSET       = 'popular:weekly:zset';
@@ -164,9 +164,49 @@ async function refreshWeeklyPopularity() {
     console.log(`Weekly popular updated — ${titles.length} movies ranked`);
 }
 
+
+async function getPopularDaily(page = 1, limit = 20) {
+    const start = (page - 1) * limit;
+    const end   = start + limit - 1;
+    const titles = await client.zRevRange(DAILY_ZSET, start, end);
+    if (!titles.length)
+        console.log('Hot ZSET empty - possible cold start');
+    return await enrichWithStats(titles);
+}
+
+async function getPopularWeekly(page = 1, limit = 20) {
+    const start = (page - 1) * limit;
+    const end   = start + limit - 1;
+    const titles = await client.zRevRange(WEEKLY_ZSET, start, end);
+    return await enrichWithStats(titles);
+}
+
+async function getYesterdayPopular(limit = 10) {
+    const titles = await client.zRevRange(DAILY_PREVIOUS, 0, limit - 1);
+    return await enrichWithStats(titles);
+}
+
+async function getLastWeekPopular(limit = 10) {
+    const titles = await client.zRevRange(WEEKLY_PREVIOUS, 0, limit - 1);
+    return await enrichWithStats(titles);
+}
+
+// Read hot movies (sorted by recency + action weight)
+async function getHotMovies(limit = 10) {
+    const titles = await client.zRevRange(HOT_ZSET, 0, limit - 1);
+    if (!titles.length)
+        console.log('Hot ZSET empty — possible cold start');
+    return await enrichWithStats(titles);
+}
+
 module.exports = {
     trackView,
     trackLike,
     refreshDailyPopularity,
-    refreshWeeklyPopularity
+    refreshWeeklyPopularity,
+    getPopularDaily,
+    getPopularWeekly,
+    getYesterdayPopular,
+    getLastWeekPopular,
+    getHotMovies
 };
