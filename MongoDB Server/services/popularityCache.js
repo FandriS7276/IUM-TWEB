@@ -2,17 +2,23 @@ const client = require('../database/redisClient');
 const { getMovieStats } = require('./statsCache');
 const { enrichWithStats } = require('../utils/enrichment.js');
 
+// ========================
+// KEYS & CONSTANTS
+// ========================
+
 const DAILY_ZSET        = 'popular:daily:zset';
 const WEEKLY_ZSET       = 'popular:weekly:zset';
 const DAILY_PREVIOUS    = 'popular:daily:previous';
 const WEEKLY_PREVIOUS   = 'popular:weekly:previous';
-
 const ACTIVE_DAILY      = 'active:daily';
 const ACTIVE_WEEKLY     = 'active:weekly';
-
-// Recent hot movies
 const HOT_ZSET = 'hot:short:zset';          // rolling hot list
 const HOT_TTL = 4 * 60 * 60;                // 4 hours in seconds
+
+// ========================
+// TRACKER AREA (Input)
+// Called on every user action (view, like)
+// ========================
 
 // Update tracking for hot (call inside trackView & trackLike)
 function addToHot(title, bonus = 100) {
@@ -54,6 +60,11 @@ async function trackLike(title) {
     // Giving likes more value for the hotlist
     await addToHot(title, 300);
 }
+
+// ========================
+// REFRESH AREA (Cron jobs)
+// Runs nightly / weekly to build rankings
+// ========================
 
 // Daily refresh (cron: 5 0 * * *) - runs every night at 00:05
 async function refreshDailyPopularity() {
@@ -112,7 +123,6 @@ async function refreshDailyPopularity() {
     console.log(`Daily popular updated — ${titles.length} movies ranked`);
 }
 
-// ──────────────────────────────────────────────
 // Weekly refresh (cron: 5 0 * * 0) - Sunday midnight
 async function refreshWeeklyPopularity() {
     console.log('🔥 Refreshing WEEKLY popular...');
@@ -165,6 +175,11 @@ async function refreshWeeklyPopularity() {
 }
 
 
+// ========================
+// OUTPUT AREA (Read functions)
+// Called by routes to return data to frontend
+// ========================
+
 async function getPopularDaily(page = 1, limit = 20) {
     const start = (page - 1) * limit;
     const end   = start + limit - 1;
@@ -202,8 +217,10 @@ async function getHotMovies(limit = 10) {
 module.exports = {
     trackView,
     trackLike,
+
     refreshDailyPopularity,
     refreshWeeklyPopularity,
+    
     getPopularDaily,
     getPopularWeekly,
     getYesterdayPopular,
