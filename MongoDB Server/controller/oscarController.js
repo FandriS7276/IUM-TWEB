@@ -1,8 +1,8 @@
 const oscar = require('../schema/oscarSchema')
 const { extractPagination, buildPaginatedResponse, emptyPaginatedResponse } = require('../utils/pagination');
 const { getMovieStats } = require('../services/statsCache');
-const { enrichWithStats } = require('../utils/enrichment')
-const { handleError } = require('../utils/handler')
+const { handleError } = require('../utils/handler');
+const { validateCategory } = require('../utils/validation')
 
 
 //Get all oscars awards or filtered
@@ -37,19 +37,6 @@ exports.getAllOscars = async (req, res) => {
                     message: err.message
                 });
             }
-        }
-        
-        // TODO use movie validation from movieCache
-
-        if (film) {
-        const cleanedFilm = film.trim();
-        if (!cleanedFilm) {
-            return res.status(400).json({ success: false, message: 'film cannot be empty' });
-        }
-        // Safe exact match (case-insensitive) – better than regex for titles
-        filter.film = { $regex: new RegExp(`^${escapeRegex(cleanedFilm)}$`, 'i') };
-        // Alternative: exact match with collation (if you have index)
-        // filter.film = cleanedFilm; // + .collation({ locale: 'en', strength: 2 })
         }
 
         if (winner !== undefined) {

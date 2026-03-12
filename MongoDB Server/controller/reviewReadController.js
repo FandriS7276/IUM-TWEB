@@ -1,7 +1,6 @@
 const rottenReview =require('../schema/rottenSchema')
 const { extractPagination, buildPaginatedResponse, emptyPaginatedResponse } = require('../utils/pagination');
 const { handleError } = require('../utils/handler');
-const { escapeRegex } = require('../utils/validation');
 
 //Get all reviews or filtered
 exports.getReviews = async (req,res) => {
@@ -10,7 +9,7 @@ exports.getReviews = async (req,res) => {
         const { page, limit, skip } = extractPagination(req.query);
 
         // Build safe filter from query params
-        const { movie_title, review_type, top_critic, from_date, to_date, sortBy } = req.query;
+        const { review_type, top_critic, from_date, to_date, sortBy } = req.query;
         const filter = {};
         let sort = {review_date: -1}; // Default
 
@@ -22,17 +21,11 @@ exports.getReviews = async (req,res) => {
             filter.review_type = review_type;
         }
 
-        // TODO implement movie validation from movieCache
-
-        if (movie_title) {
-            filter.movie_title = escapeRegex(movie_title)
-            filter.movie_title = movie_title.trim().replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'); // Escape regex special chars
-            filter.movie_title = { $regex: `^${filter.movie_title}$`, $options: 'i' }; // Case-insensitive exact match
-        }
         if (top_critic !== undefined) {
             const isTop = top_critic === 'true' || top_critic === true;
             filter.top_critic = isTop;  // true = only top, false = exclude top
         }
+
         if (from_date || to_date) {
             filter.review_date = {};
             if (from_date) {
@@ -49,6 +42,7 @@ exports.getReviews = async (req,res) => {
                 delete filter.review_date; // Remove if no valid dates
             }
         }
+
         if (sortBy){
             const validSorts = {
                 'date-desc': { review_date: -1 },
@@ -77,7 +71,7 @@ exports.getReviews = async (req,res) => {
         }
 
         // Get total count for pagination metadata
-        const total = await reviews.countDocuments();
+        const total = await reviews.countDocuments(filter);
 
         // Build and send paginated response
         res.status(200).json(buildPaginatedResponse(reviews, total, page, limit, {appliedFilters:{review_type, movie_title, top_critic, from_date, to_date}, appliedSort: sort}));
