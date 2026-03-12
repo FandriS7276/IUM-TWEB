@@ -1,6 +1,6 @@
 const client = require('../database/redisClient');
 const { getMovieStats } = require('./statsCache');
-const { enrichWithStats } = require('../utils/enrichment.js');
+const { enrichWithStats } = require('../utils/enrichment');
 
 // ========================
 // KEYS & CONSTANTS

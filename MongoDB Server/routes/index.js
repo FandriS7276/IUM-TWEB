@@ -5,7 +5,7 @@ var router = express.Router();
 router.use('/reviews', require('./reviews'));
 router.use('/awards', require('./oscar'));
 router.use('/popular', require('./popular'));
-router.use('/user', require('./users.js'));
+router.use('/user', require('./users'));
 
 // Optional: root health check
 router.get('/', (req, res) => {

@@ -54,7 +54,7 @@ var app = express();
 
 const http = require('http');
 // Chat connection with Socket.IO
-const { initSocket } = require('./services/socket.js');
+const { initSocket } = require('./services/socket');
 // Database connection
 const dbConnect = require('./database/dbConnect');
 
