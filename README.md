@@ -1,22 +1,23 @@
 # packages to be installed
 
-# node.js long term support installation and default setting
+## node.js long term support installation and default setting
 nvm install --lts
 nvm use --lts
 nvm alias default lts/*
 
-# using environment and rate limit variables and settings to prevent abuse
+## using environment and rate limit variables and settings to prevent abuse
 npm install dotenv
 npm install express-rate-limit
 
 
-# using lint to improve code and avoid bugs
+## using lint to improve code and avoid bugs
 npm install eslint --save-dev
 npx eslint --init
 
 
-# using vite 8 beta for react.jsx templating
+## using vite 8 beta for react.jsx templating
 npm create vite@latest < folder-name > -- --template react
 
-# using redis to speed up caching and file reading during calls
+## using redis to speed up caching and file reading during calls
+
 npm install redis
