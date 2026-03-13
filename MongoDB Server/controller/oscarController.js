@@ -103,7 +103,7 @@ exports.getAllOscars = async (req, res) => {
             return res.json(emptyPaginatedResponse(limit));
         }
 
-        const total = await oscars.countDocuments(filter);
+        const total = await oscar.countDocuments(filter);
 
         // Lazy stats only for the films in this page (fast)
         const uniqueFilms = [...new Set(oscars.map(a => a.film))];

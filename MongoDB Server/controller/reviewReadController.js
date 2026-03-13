@@ -81,7 +81,7 @@ exports.getReviews = async (req,res) => {
         }
 
         // Get total count for pagination metadata
-        const total = await reviews.countDocuments(filter);
+        const total = await rottenReview.countDocuments(filter);
 
         // Build and send paginated response
         res.status(200).json(buildPaginatedResponse(reviews, total, page, limit, {appliedFilters:{review_type, movie_title, top_critic, from_date, to_date}, appliedSort: sort}));
