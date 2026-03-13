@@ -1,6 +1,7 @@
 const rottenReview =require('../schema/rottenSchema')
 const { extractPagination, buildPaginatedResponse, emptyPaginatedResponse } = require('../utils/pagination');
 const { handleError } = require('../utils/handler');
+const { buildMongoSort } = require('../utils/sortBuilder');
 
 //Get all reviews or filtered
 exports.getReviews = async (req,res) => {
@@ -11,7 +12,6 @@ exports.getReviews = async (req,res) => {
         // Build safe filter from query params
         const { review_type, top_critic, from_date, to_date, sortBy } = req.query;
         const filter = {};
-        let sort = {review_date: -1}; // Default
 
         // Validate and add filters if provided
         if (review_type) {
@@ -43,17 +43,27 @@ exports.getReviews = async (req,res) => {
             }
         }
 
-        if (sortBy){
-            const validSorts = {
-                'date-desc': { review_date: -1 },
-                'date-asc':  { review_date:  1 },
-                'fresh-desc': { freshCount: -1 }, // requires index or computed field
-                'tomatometer-desc': { tomatometer: -1 } // requires computed field
-            };
-            if (!validSorts[sortBy]){
-                return res.status(400).json({ success: false, message: `Invalid sort_by. Valid: ${Object.keys(validSorts).join(', ')}` });
-            }
-            sort = validSorts[sortBy];
+        let sort;
+        try {
+            sort = buildMongoSort({
+                sortByQuery: req.query.sortBy,
+                validFieldsMap: {
+                date: 'review_date',
+                type: 'review_type'
+                },
+                defaultDirection: {
+                date: 'desc',               // newest first = most common
+                type: 'asc'
+                },
+                defaultSort: { review_date: -1 },
+                addIdTieBreaker: true,
+            });
+        }
+        catch (err) {
+            return res.status(400).json({
+                success: false,
+                message: err.message,
+            });
         }
 
         // Fetching reviews with pagination and sorting by newest first

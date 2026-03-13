@@ -2,7 +2,8 @@ const oscar = require('../schema/oscarSchema')
 const { extractPagination, buildPaginatedResponse, emptyPaginatedResponse } = require('../utils/pagination');
 const { getMovieStats } = require('../services/statsCache');
 const { handleError } = require('../utils/handler');
-const { validateCategory } = require('../utils/validation')
+const { validateCategory } = require('../utils/validation');
+const { buildMongoSort } = require('../utils/sortBuilder');
 
 
 //Get all oscars awards or filtered
@@ -11,20 +12,19 @@ exports.getAllOscars = async (req, res) => {
         const { page, limit, skip } = extractPagination(req.query);
 
         // Build safe filter from query params
-        const { year_film, category, film, winner, from_date, to_date, sortBy } = req.query;
+        const { year_ceremony, category, winner, from_date, to_date, sortBy } = req.query;
         const filter = {};
-        let sort = {year_film: -1, film: 1}; // Default: newest year first, then film A-Z
 
         // Validate and add filters
-        if (year_film) {
-            const year = Number(year_film);
-            if (isNaN(year) || year < 1929 || year > new Date().getFullYear() + 10) {
+        if (year_ceremony) {
+            const year = Number(year_ceremony);
+            if (isNaN(year) || year < 1929 || year > new Date().getFullYear()) {
                 return res.status(400).json({
                     success: false,
                     message: 'Invalid year_film: must be a valid year'
                 });
             }
-            filter.year_film = year;
+            filter.year_ceremony = year;
         }
         
         if (category) {
@@ -61,54 +61,48 @@ exports.getAllOscars = async (req, res) => {
             }
         }
 
-        if (sortBy) {
-        const sortParts = sortBy.split(',').map(s => s.trim());
-        const validFields = {
-            'year': 'year_film',
-            'ceremony': 'year_ceremony',
-            'category': 'category',
-            'film': 'film'
-        };
-
-        const mongoSortObj = {};
-
-        for (const part of sortParts) {
-            const [fieldRaw, dir = 'desc'] = part.split('-'); // e.g. "year-desc" or "film-asc"
-            const field = validFields[fieldRaw];
-
-            if (!field) {
+        let sort;
+        try {
+            sort = buildMongoSort({
+                sortByQuery: req.query.sortBy,
+                validFieldsMap: {
+                year: 'year_film',
+                ceremony: 'year_ceremony',
+                category: 'category',
+                film: 'film',
+                name: 'name',
+                winner: 'winner'
+                },
+                defaultDirection: {
+                year: 'desc',
+                ceremony: 'desc',
+                category: 'asc',
+                film: 'asc',
+                name: 'asc',
+                winner: 'desc'
+                },
+                defaultSort: { year_ceremony: -1, film: 1 },
+                addIdTieBreaker: true,
+            });
+        }
+        catch (err) {
             return res.status(400).json({
                 success: false,
-                message: `Invalid sort field: ${fieldRaw}. Allowed: ${Object.keys(validFields).join(', ')}`
+                message: err.message,
             });
-            }
-
-            if (!['asc', 'desc'].includes(dir.toLowerCase())) {
-            return res.status(400).json({
-                success: false,
-                message: `Invalid sort direction for ${fieldRaw}: must be asc or desc`
-            });
-            }
-
-            mongoSortObj[field] = dir.toLowerCase() === 'asc' ? 1 : -1;
         }
-
-        sort = mongoSortObj; // override default
-        }
-
         const oscars = await oscar
-            .find(filter)                       // all Oscars or filtered
-            .sort({ year_film: -1 })            // newest years first (good for movies)
-            .skip(skip)                         // ← skips the calculated number
-            .limit(limit)                       // ← caps how many we return
-            .lean();                            // faster, plain object
+            .find(filter)
+            .sort(sort)
+            .skip(skip)
+            .limit(limit)
+            .lean();
         
         // Early return if nothing found
         if (oscars.length === 0) {
             return res.json(emptyPaginatedResponse(limit));
         }
 
-        // Bonus: total count for frontend to know total pages
         const total = await oscars.countDocuments(filter);
 
         // Lazy stats only for the films in this page (fast)
