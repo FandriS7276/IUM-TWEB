@@ -1,7 +1,13 @@
-const rottenReview =require('../schema/rottenSchema')
+const rottenReview = require('../schema/rottenSchema')
 const { extractPagination, buildPaginatedResponse, emptyPaginatedResponse } = require('../utils/pagination');
 const { handleError } = require('../utils/handler');
-const { buildMongoSort } = require('../utils/sortParser');
+const { parseSortBy, toMongoSort } = require('../utils/sortParser');
+
+const ALLOWED_SORT_FIELDS = [
+    'review_date',
+    'review_score',     // only useful if you store it as number
+    'review_type',
+];
 
 //Get all reviews or filtered
 exports.getReviews = async (req,res) => {
@@ -12,6 +18,7 @@ exports.getReviews = async (req,res) => {
         // Build safe filter from query params
         const { review_type, top_critic, from_date, to_date, sortBy } = req.query;
         const filter = {};
+        let mongoSort = { review_date: -1 }; // Default sort
 
         // Validate and add filters if provided
         if (review_type) {
@@ -43,33 +50,24 @@ exports.getReviews = async (req,res) => {
             }
         }
 
-        let sort;
-        try {
-            sort = buildMongoSort({
-                sortByQuery: req.query.sortBy,
-                validFieldsMap: {
-                date: 'review_date',
-                type: 'review_type'
-                },
-                defaultDirection: {
-                date: 'desc',               // newest first = most common
-                type: 'asc'
-                },
-                defaultSort: { review_date: -1 },
-                addIdTieBreaker: true,
-            });
-        }
-        catch (err) {
-            return res.status(400).json({
-                success: false,
-                message: err.message,
-            });
+        if (sortBy) {
+            try {
+                const specs = parseSortBy(sortBy, ALLOWED_SORT_FIELDS);
+                mongoSort = toMongoSort(specs);
+            }
+            catch (err){
+                return res.status(400).json({
+                    success: false,
+                    message: err.message,
+                    example: 'review_date-desc,review_score-asc'
+                });
+            }
         }
 
         // Fetching reviews with pagination and sorting by newest first
         const reviews = await rottenReview
             .find(filter)
-            .sort(sort) // Newest reviews first
+            .sort(mongoSort) // Newest reviews first
             .skip(skip)
             .limit(limit)
             .lean() // lean() returns plain JS objects instead of Mongoose documents, more efficient if we don't need Mongoose methods
@@ -84,7 +82,16 @@ exports.getReviews = async (req,res) => {
         const total = await rottenReview.countDocuments(filter);
 
         // Build and send paginated response
-        res.status(200).json(buildPaginatedResponse(reviews, total, page, limit, {appliedFilters:{review_type, movie_title, top_critic, from_date, to_date}, appliedSort: sort}));
+        res.status(200).json(buildPaginatedResponse(
+            reviews,
+            total,
+            page,
+            limit,
+            {
+                appliedFilters:{review_type, top_critic, from_date, to_date},
+                appliedSort: sortBy || 'review_date-desc'
+            }
+        ));
     }
     catch (err) {
         if (err.status === 400)
