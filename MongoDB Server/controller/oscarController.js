@@ -3,7 +3,7 @@ const { extractPagination, buildPaginatedResponse, emptyPaginatedResponse } = re
 const { getMovieStats } = require('../services/statsCache');
 const { handleError } = require('../utils/handler');
 const { validateCategory } = require('../utils/validation');
-const { buildMongoSort } = require('../utils/sortBuilder');
+const { buildMongoSort } = require('../utils/sortParser');
 
 
 //Get all oscars awards or filtered

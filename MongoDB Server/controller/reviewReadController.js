@@ -1,7 +1,7 @@
 const rottenReview =require('../schema/rottenSchema')
 const { extractPagination, buildPaginatedResponse, emptyPaginatedResponse } = require('../utils/pagination');
 const { handleError } = require('../utils/handler');
-const { buildMongoSort } = require('../utils/sortBuilder');
+const { buildMongoSort } = require('../utils/sortParser');
 
 //Get all reviews or filtered
 exports.getReviews = async (req,res) => {
