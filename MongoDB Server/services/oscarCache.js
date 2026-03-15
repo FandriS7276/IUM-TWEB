@@ -83,8 +83,35 @@ async function initCategoryWatcher() {
     });
 }
 
+// Caching grouped oscar searches
+const CACHE_PREFIX = 'oscars:grouped:';
+const CACHE_TTL_SECONDS = 90 * 24 * 60 * 60; // 90 days
+
+function getOscarsCacheKey(query = {}) {
+    // Only filters matter for cache key - ignore page, limit and sortBy
+    const filterOnly = {
+        year_film: query.year_film,
+        year_ceremony: query.year_ceremony,
+        winner: query.winner,
+        category: query.category,
+        from_date: query.from_date,
+        to_date: query.to_date
+    }
+
+    // Clean undefined or null cache keys
+    Object.keys(relevant).forEach(k => {
+        if (relevant[k] == null) delete relevant[k];
+    });
+
+    // Sort keys alphabetically → stable key regardless of query param order
+    const sortedQuery = JSON.stringify(query, Object.keys(query).sort());
+    return `${CACHE_PREFIX}${sortedQuery}`;
+}
+
 module.exports = {
     refreshNominatedCache,
     getNominatedTitles,
-    initCategoryWatcher
+    initCategoryWatcher,
+    getOscarsCacheKey,
+    CACHE_TTL_SECONDS
 };
