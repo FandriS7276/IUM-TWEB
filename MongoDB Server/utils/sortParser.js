@@ -72,7 +72,7 @@ function toMongoSort(specs) {
  * @returns {(a: any, b: any) => number}
  */
 
-// Sort list based on tomatometer's Redis stats
+// Sort list for already loaded data
 // Turn validated array → (a,b) ⇒ number function for array.sort()
 function toInMemoryComparator(specs) {
     if (specs.length === 0) return () => 0;
