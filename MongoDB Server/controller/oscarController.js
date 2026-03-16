@@ -71,7 +71,7 @@ exports.getAllOscars = async (req, res) => {
         const cacheKey = getOscarsCacheKey(req.query);
         let groupedData = await client.get(cacheKey);
         if (groupedData) {
-            formatted = JSON.parse(groupedData)
+            groupedData = JSON.parse(groupedData)
         }
         else{
             // Aggregation: group by movie
@@ -87,11 +87,11 @@ exports.getAllOscars = async (req, res) => {
                     },
                     awards: {
                         $push: {
-                        category: '$category',
-                        year_ceremony: '$year_ceremony',
-                        name: '$name',
-                        winner: '$winner',
-                        ceremony: '$ceremony'
+                            category: '$category',
+                            year_ceremony: '$year_ceremony',
+                            name: '$name',
+                            winner: '$winner',
+                            ceremony: '$ceremony'
                         }
                     },
                     winsCount: { $sum: { $cond: [{ $eq: ['$winner', true] }, 1, 0] } },
@@ -102,19 +102,25 @@ exports.getAllOscars = async (req, res) => {
                 // Pre-sort awards inside each movie: wins first, then newest
                 {
                     $set: {
-                    awards: {
-                        $sortArray: {
-                        input: '$awards',
-                        sortBy: {
-                            winner: -1,           // true before false
-                            year_ceremony: -1,    // newest first
-                            ceremony: -1
-                        }
+                        awards: {
+                            $sortArray: {
+                                input: '$awards',
+                                sortBy: {
+                                    winner: -1,           // true before false
+                                    year_ceremony: -1,    // newest first
+                                    ceremony: -1
+                                }
+                            }
                         }
                     }
+                },
+                {
+                    $sort: {
+                        year_ceremony: -1,
+                        film: 1
                     }
                 }
-                ];
+            ];
     
             let results = await oscar.aggregate(pipeline);
     
@@ -123,7 +129,7 @@ exports.getAllOscars = async (req, res) => {
             }
     
             // Format for frontend + add computed fields if needed
-            const formatted = results.map(r => ({
+            const groupedData = results.map(r => ({
                 film: r._id.film,
                 year_film: r._id.year_film,
                 winsCount: r.winsCount,
@@ -131,16 +137,20 @@ exports.getAllOscars = async (req, res) => {
                 awards: r.awards
             }));
     
-            await client.set(cacheKey, JSON.stringify(formatted), { EX: CACHE_TTL });
+            await client.set(cacheKey, JSON.stringify(groupedData), { EX: CACHE_TTL });
         }
-        // TODO - comparator may be off
-        // Dynamic sorting
-        let comparator = (a, b) => b.winsCount - a.winsCount; // default: most wins first
+
+        let formatted = [...groupedData]
 
         if (sortBy) {
             try {
                 const specs = parseSortBy(sortBy, ALLOWED_SORT_FIELDS);
-                comparator = toInMemoryComparator(specs);
+                const comparator = toInMemoryComparator(specs);
+                data.sort((a,b) =>{
+                    const primary = comparator(a,b);
+                    // tie-breaker - provides deterministic order (probably overkill)
+                    return primary !== 0 ? primary : a.film.localeCompare(b.film);
+                });
             }
             catch (err) {
                 return res.status(400).json({
@@ -151,20 +161,14 @@ exports.getAllOscars = async (req, res) => {
             }
         }
 
-        // Apply sort + stable tie-breaker (alphabetical film name)
-        formatted.sort((a, b) => {
-            const primary = comparator(a, b);
-            return primary !== 0 ? primary : a.film.localeCompare(b.film);
-        });
-
-        // ── Pagination on sorted array ───────────────────────────────────────
-        const total = formatted.length;
-        const paginated = formatted.slice(skip, skip + limit);
+        // Pagination on sorted array
+        const total = data.length;
+        const paginated = data.slice(skip, skip + limit);
 
         res.json(
             buildPaginatedResponse(paginated, total, page, limit, {
                 appliedFilters: req.query,
-                appliedSort: sortBy || 'winsCount-desc',
+                appliedSort: sortBy || 'year_ceremony-desc, film-asc',
                 note: 'Awards are pre-sorted: wins first, then newest ceremony'
             })
         );
