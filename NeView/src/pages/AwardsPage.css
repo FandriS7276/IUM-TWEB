@@ -1,0 +1,127 @@
+/* ── Awards Page ──────────────────────────────────────────────── */
+.awards-page {
+  padding-top: calc(var(--navbar-height) + var(--space-xl));
+  padding-bottom: var(--space-2xl);
+  min-height: 100vh;
+}
+
+.awards-page__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+  color: var(--star);
+}
+
+.awards-page__title {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--text-white);
+}
+
+/* Tabs */
+.awards-tabs {
+  display: flex;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xl);
+}
+
+.awards-tab {
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  transition: all var(--transition-fast);
+}
+
+.awards-tab:hover {
+  color: var(--text-white);
+  border-color: var(--text-secondary);
+}
+
+.awards-tab--active {
+  background: var(--star);
+  color: #141414;
+  border-color: var(--star);
+}
+
+/* Grid */
+.awards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+
+.award-card {
+  display: flex;
+  gap: var(--space-md);
+  background: var(--bg-card);
+  padding: var(--space-lg);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--star);
+  transition: background var(--transition-fast);
+}
+
+.award-card:hover {
+  background: var(--bg-hover);
+}
+
+.award-card__year {
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--star);
+  flex-shrink: 0;
+}
+
+.award-card__film {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-white);
+  margin-bottom: var(--space-xs);
+}
+
+.award-card__stats {
+  display: flex;
+  gap: var(--space-md);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-sm);
+}
+
+.award-card__wins {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--star);
+  font-weight: 600;
+}
+
+.award-card__categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.award-card__cat {
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(255,255,255,.06);
+  color: var(--text-muted);
+}
+
+.award-card__cat--won {
+  background: rgba(245, 197, 24, .15);
+  color: var(--star);
+}
+
+.awards-page__note {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-style: italic;
+}

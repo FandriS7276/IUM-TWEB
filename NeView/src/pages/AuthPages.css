@@ -1,0 +1,125 @@
+/* ── Auth Pages (Sign In / Sign Up) ──────────────────────────── */
+
+.auth-page {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xl);
+}
+
+/* Cinematic background */
+.auth-page__bg {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(160deg, #0a0a0a 0%, #1a1a2e 30%, #16213e 60%, #0f3460 100%);
+  z-index: 0;
+}
+
+.auth-page__overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, .55);
+  z-index: 1;
+}
+
+/* ── Card ────────────────────────────────────────────────────── */
+.auth-card {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 420px;
+  background: rgba(0, 0, 0, .75);
+  border-radius: var(--radius-lg);
+  padding: 48px 56px;
+  animation: slideUp var(--transition-slow) both;
+}
+
+.auth-card__title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-white);
+  margin-bottom: var(--space-lg);
+}
+
+.auth-card__error {
+  background: rgba(229, 9, 20, .15);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  margin-bottom: var(--space-md);
+}
+
+/* ── Form ────────────────────────────────────────────────────── */
+.auth-card__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.auth-card__field input {
+  width: 100%;
+  padding: 14px 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-white);
+  font-size: 0.95rem;
+  transition: border-color var(--transition-fast);
+}
+
+.auth-card__field input::placeholder {
+  color: var(--text-muted);
+}
+
+.auth-card__field input:focus {
+  border-color: var(--text-white);
+}
+
+.auth-card__submit {
+  width: 100%;
+  padding: 14px;
+  background: var(--accent);
+  color: var(--text-white);
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  font-weight: 700;
+  margin-top: var(--space-sm);
+  transition: background var(--transition-fast);
+}
+
+.auth-card__submit:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.auth-card__submit:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+/* ── Footer link ─────────────────────────────────────────────── */
+.auth-card__footer {
+  margin-top: var(--space-lg);
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.auth-card__link {
+  color: var(--text-white);
+  font-weight: 600;
+}
+
+.auth-card__link:hover {
+  text-decoration: underline;
+}
+
+/* ── Responsive ──────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .auth-card {
+    padding: 32px 24px;
+  }
+}

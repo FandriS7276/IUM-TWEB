@@ -1,0 +1,466 @@
+/* ── Movie Detail Page ────────────────────────────────────────── */
+
+/* ── Hero ─────────────────────────────────────────────────────── */
+.md-hero {
+  position: relative;
+  min-height: 60vh;
+  display: flex;
+  align-items: flex-end;
+  padding-bottom: var(--space-xl);
+}
+
+.md-hero__backdrop {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 20%;
+  filter: blur(8px) brightness(.4);
+  transform: scale(1.05);
+}
+
+.md-hero__gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, var(--bg-primary) 0%, transparent 70%);
+}
+
+.md-hero__content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  gap: var(--space-xl);
+  padding: var(--space-xl) var(--space-xl) 0;
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+  width: 100%;
+}
+
+.md-hero__poster {
+  flex-shrink: 0;
+  width: 220px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+.md-hero__poster img {
+  width: 100%;
+  height: auto;
+}
+
+.md-hero__poster-placeholder {
+  width: 100%;
+  aspect-ratio: 2/3;
+  background: linear-gradient(135deg, #1a1a2e, #0f3460, #e94560);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 4rem;
+  font-weight: 900;
+  color: var(--text-white);
+}
+
+.md-hero__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.md-hero__title {
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  font-weight: 800;
+  color: var(--text-white);
+  margin-bottom: var(--space-xs);
+}
+
+.md-hero__tagline {
+  font-size: 1rem;
+  font-style: italic;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-md);
+}
+
+.md-hero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.md-hero__meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.md-hero__genre-tag {
+  border: 1px solid var(--border-subtle);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.md-hero__desc {
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  line-height: 1.7;
+  margin-bottom: var(--space-lg);
+  max-width: 700px;
+}
+
+/* ── Stats row ───────────────────────────────────────────────── */
+.md-stats {
+  display: flex;
+  gap: var(--space-xl);
+}
+
+.md-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.md-stat__value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-white);
+}
+
+.md-stat__label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ── Sections ────────────────────────────────────────────────── */
+.md-section {
+  padding-top: var(--space-xl);
+  padding-bottom: var(--space-xl);
+}
+
+.md-section__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-white);
+  margin-bottom: var(--space-lg);
+}
+
+.md-section__empty {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+.md-section__signin-prompt {
+  color: var(--text-secondary);
+  margin-bottom: var(--space-lg);
+}
+
+.md-section__signin-prompt a {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ── Cast & Crew Grid ────────────────────────────────────────── */
+.md-cast-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-md);
+}
+
+.md-cast-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  transition: background var(--transition-fast);
+}
+
+.md-cast-card:hover {
+  background: var(--bg-hover);
+}
+
+.md-cast-card__avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text-white);
+  flex-shrink: 0;
+}
+
+.md-cast-card__name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-white);
+}
+
+.md-cast-card__role {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+/* ── Review Form ─────────────────────────────────────────────── */
+.md-review-form {
+  background: var(--bg-card);
+  padding: var(--space-lg);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-xl);
+}
+
+.md-review-form__heading {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-white);
+  margin-bottom: var(--space-md);
+}
+
+.md-review-form__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.md-review-form__toggle input {
+  display: none;
+}
+
+.md-review-form__chip {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.md-review-form__chip--fresh {
+  background: rgba(108, 192, 74, .15);
+  color: var(--fresh);
+}
+
+.md-review-form__chip--rotten {
+  background: rgba(250, 50, 10, .15);
+  color: var(--rotten);
+}
+
+.md-review-form__toggle input:checked + .md-review-form__chip {
+  border-color: currentColor;
+}
+
+.md-review-form__score {
+  padding: 6px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-white);
+  font-size: 0.85rem;
+  width: 130px;
+}
+
+.md-review-form__textarea {
+  width: 100%;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-white);
+  font-size: 0.9rem;
+  resize: vertical;
+  min-height: 80px;
+  margin-bottom: var(--space-md);
+  transition: border-color var(--transition-fast);
+}
+
+.md-review-form__textarea:focus {
+  border-color: var(--text-secondary);
+}
+
+.md-review-form__submit {
+  padding: 10px 24px;
+  background: var(--accent);
+  color: var(--text-white);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: 0.9rem;
+  transition: background var(--transition-fast);
+}
+
+.md-review-form__submit:hover {
+  background: var(--accent-hover);
+}
+
+/* ── Reviews List ────────────────────────────────────────────── */
+.md-reviews-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.md-review {
+  background: var(--bg-card);
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--border-subtle);
+}
+
+.md-review__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
+.md-review__type {
+  font-size: 1.3rem;
+}
+
+.md-review__critic {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-white);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.md-review__tc-badge {
+  color: var(--star);
+}
+
+.md-review__pub {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.md-review__score {
+  margin-left: auto;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: rgba(255,255,255,.08);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.md-review__content {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+/* ── Live Chat ───────────────────────────────────────────────── */
+.md-chat {
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+}
+
+.md-chat__messages {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.md-chat__empty {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: var(--space-xl) 0;
+}
+
+.md-chat__msg {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  font-size: 0.85rem;
+}
+
+.md-chat__user {
+  font-weight: 700;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.md-chat__text {
+  color: var(--text-primary);
+}
+
+.md-chat__time {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.md-chat__input-row {
+  display: flex;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.md-chat__input {
+  flex: 1;
+  padding: 12px var(--space-md);
+  background: var(--bg-secondary);
+  color: var(--text-white);
+  font-size: 0.9rem;
+}
+
+.md-chat__input::placeholder {
+  color: var(--text-muted);
+}
+
+.md-chat__send {
+  padding: 12px var(--space-md);
+  background: var(--accent);
+  color: var(--text-white);
+  transition: background var(--transition-fast);
+}
+
+.md-chat__send:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.md-chat__send:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+/* ── Responsive ──────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .md-hero__content {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .md-hero__poster { width: 160px; }
+
+  .md-hero__meta { justify-content: center; }
+
+  .md-stats { justify-content: center; flex-wrap: wrap; }
+}
