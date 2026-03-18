@@ -1,0 +1,81 @@
+/* ── MovieRow — Horizontal scrollable genre row ──────────────── */
+
+.movie-row {
+  padding: var(--space-lg) 0;
+  position: relative;
+  /* Provide enough overflow space for the expanded card below */
+  margin-bottom: var(--space-2xl);
+}
+
+.movie-row__title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-white);
+  padding-left: var(--space-xl);
+  margin-bottom: var(--space-md);
+  transition: color var(--transition-fast);
+}
+
+.movie-row__title:hover {
+  color: var(--text-secondary);
+}
+
+/* ── Wrapper holds the track + overlay arrows ────────────────── */
+.movie-row__wrapper {
+  position: relative;
+}
+
+/* ── Scrollable track ────────────────────────────────────────── */
+.movie-row__track {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-xl);
+  overflow-x: auto;
+  overflow-y: visible;
+  scroll-snap-type: x mandatory;
+  -ms-overflow-style: none;     /* Hide scrollbar IE/Edge */
+  scrollbar-width: none;        /* Hide scrollbar Firefox */
+}
+
+.movie-row__track::-webkit-scrollbar {
+  display: none;                /* Hide scrollbar Webkit  */
+}
+
+.movie-row__track > * {
+  scroll-snap-align: start;
+}
+
+/* ── Navigation arrows ───────────────────────────────────────── */
+.movie-row__arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 20;
+  width: 48px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-white);
+  background: rgba(20, 20, 20, .7);
+  opacity: 0;
+  transition: opacity var(--transition-fast), background var(--transition-fast);
+}
+
+.movie-row__wrapper:hover .movie-row__arrow {
+  opacity: 1;
+}
+
+.movie-row__arrow:hover {
+  background: rgba(20, 20, 20, .9);
+}
+
+.movie-row__arrow--left {
+  left: 0;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.movie-row__arrow--right {
+  right: 0;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}

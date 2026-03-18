@@ -1,0 +1,188 @@
+/* ── Navbar ──────────────────────────────────────────────────────── */
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--navbar-height);
+  padding: 0 var(--space-xl);
+  background: linear-gradient(180deg, rgba(0,0,0,.7) 10%, transparent);
+  transition: background var(--transition-normal);
+}
+
+.navbar--scrolled {
+  background: var(--bg-primary);
+  box-shadow: 0 2px 10px rgba(0,0,0,.5);
+}
+
+/* ── Left section ───────────────────────────────────────────────── */
+.navbar__left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xl);
+}
+
+.navbar__logo {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--text-white);
+  letter-spacing: -0.5px;
+}
+
+.navbar__logo-text {
+  color: var(--accent);
+  font-size: 2rem;
+  font-weight: 900;
+}
+
+.navbar__links {
+  display: flex;
+  gap: var(--space-lg);
+}
+
+.navbar__link {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  transition: color var(--transition-fast);
+}
+
+.navbar__link:hover {
+  color: var(--text-white);
+}
+
+/* ── Right section ──────────────────────────────────────────────── */
+.navbar__right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.navbar__icon-btn {
+  color: var(--text-primary);
+  padding: var(--space-xs);
+  transition: color var(--transition-fast);
+}
+
+.navbar__icon-btn:hover {
+  color: var(--text-white);
+}
+
+/* ── Search ─────────────────────────────────────────────────────── */
+.navbar__search {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.navbar__search-input {
+  width: 0;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-white);
+  font-size: 0.875rem;
+  transition: width var(--transition-normal), padding var(--transition-normal), border-color var(--transition-normal), background var(--transition-normal);
+}
+
+.navbar__search--open .navbar__search-input {
+  width: 220px;
+  padding: 6px 12px;
+  background: rgba(0,0,0,.75);
+  border-color: var(--text-white);
+}
+
+/* ── Profile / Dropdown ─────────────────────────────────────────── */
+.navbar__profile {
+  position: relative;
+}
+
+.navbar__profile-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.navbar__avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text-white);
+}
+
+.navbar__avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.navbar__caret {
+  transition: transform var(--transition-fast);
+}
+
+.navbar__caret--open {
+  transform: rotate(180deg);
+}
+
+.navbar__dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 160px;
+  background: rgba(20, 20, 20, .95);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) 0;
+  animation: fadeIn var(--transition-fast) both;
+}
+
+.navbar__dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  text-align: left;
+  transition: background var(--transition-fast);
+}
+
+.navbar__dropdown-item:hover {
+  background: var(--bg-hover);
+}
+
+/* ── Sign In Button ─────────────────────────────────────────────── */
+.navbar__signin-btn {
+  background: var(--accent);
+  color: var(--text-white);
+  padding: 6px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: background var(--transition-fast);
+}
+
+.navbar__signin-btn:hover {
+  background: var(--accent-hover);
+}
+
+/* ── Responsive ─────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .navbar__links {
+    display: none;
+  }
+  .navbar {
+    padding: 0 var(--space-md);
+  }
+}

@@ -1,0 +1,172 @@
+/* ── Hero Banner ──────────────────────────────────────────────── */
+.hero {
+  position: relative;
+  width: 100%;
+  height: 85vh;
+  min-height: 500px;
+  max-height: 800px;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+
+/* Poster background – covers the entire hero area */
+.hero__backdrop {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center 20%;
+  transition: opacity var(--transition-slow);
+}
+
+.hero__backdrop--fading {
+  opacity: 0;
+}
+
+/* Gradient overlays: bottom-to-top + left-to-right */
+.hero__gradient {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to top, var(--bg-primary) 0%, transparent 60%),
+    linear-gradient(to right, rgba(20,20,20,.85) 0%, transparent 50%);
+}
+
+/* ── Content ─────────────────────────────────────────────────── */
+.hero__content {
+  position: relative;
+  z-index: 2;
+  padding: var(--space-2xl) var(--space-xl);
+  max-width: 600px;
+  animation: slideUp var(--transition-slow) both;
+}
+
+.hero__title {
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 800;
+  color: var(--text-white);
+  margin-bottom: var(--space-md);
+  text-shadow: 2px 2px 8px rgba(0,0,0,.6);
+}
+
+.hero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.hero__badge {
+  background: rgba(255,255,255,.15);
+  color: var(--text-white);
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  backdrop-filter: blur(4px);
+}
+
+.hero__badge--tomato {
+  background: rgba(0,0,0,.5);
+}
+
+.hero__genre-tag {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.hero__description {
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  line-height: 1.6;
+  margin-bottom: var(--space-lg);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── CTA Buttons ─────────────────────────────────────────────── */
+.hero__actions {
+  display: flex;
+  gap: var(--space-md);
+}
+
+.hero__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 10px 24px;
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  font-weight: 700;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.hero__btn:hover {
+  transform: scale(1.05);
+}
+
+.hero__btn--play {
+  background: var(--text-white);
+  color: #141414;
+}
+
+.hero__btn--play:hover {
+  background: #e0e0e0;
+}
+
+.hero__btn--info {
+  background: rgba(109, 109, 110, .7);
+  color: var(--text-white);
+}
+
+.hero__btn--info:hover {
+  background: rgba(109, 109, 110, .5);
+}
+
+/* ── Slide Indicators ────────────────────────────────────────── */
+.hero__indicators {
+  position: absolute;
+  bottom: var(--space-xl);
+  right: var(--space-xl);
+  display: flex;
+  gap: var(--space-sm);
+  z-index: 3;
+}
+
+.hero__indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.3);
+  border: 1px solid rgba(255,255,255,.5);
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.hero__indicator--active {
+  background: var(--text-white);
+  transform: scale(1.2);
+}
+
+.hero__indicator:hover {
+  background: rgba(255,255,255,.6);
+}
+
+/* ── Responsive ──────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .hero {
+    height: 70vh;
+  }
+  .hero__content {
+    padding: var(--space-xl) var(--space-md);
+  }
+  .hero__btn {
+    padding: 8px 16px;
+    font-size: 0.875rem;
+  }
+}

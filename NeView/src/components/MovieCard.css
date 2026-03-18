@@ -1,0 +1,180 @@
+/* ── MovieCard — Netflix-style thumbnail with hover expansion ──── */
+
+.movie-card {
+  position: relative;
+  flex-shrink: 0;
+  width: 220px;
+  border-radius: var(--radius-sm);
+  overflow: visible;
+  cursor: pointer;
+  transition: transform var(--transition-normal), z-index 0s;
+  z-index: 1;
+}
+
+/* Scale up on hover, raising above siblings */
+.movie-card--expanded {
+  transform: scale(1.45);
+  z-index: 10;
+  transition: transform var(--transition-normal), z-index 0s;
+}
+
+/* ── Poster area ─────────────────────────────────────────────── */
+.movie-card__poster {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  overflow: hidden;
+  background: var(--bg-card);
+}
+
+.movie-card__poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity var(--transition-fast);
+}
+
+/* Gradient placeholder when no poster image exists */
+.movie-card__placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  padding: var(--space-md);
+  background: linear-gradient(
+    160deg,
+    #1a1a2e 0%,
+    #16213e 40%,
+    #0f3460 70%,
+    #e94560 100%
+  );
+}
+
+.movie-card__placeholder-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-white);
+  text-shadow: 0 1px 4px rgba(0,0,0,.6);
+  line-height: 1.2;
+}
+
+/* ── Expanded info panel ─────────────────────────────────────── */
+.movie-card__info {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-card);
+  padding: 10px 12px 12px;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  box-shadow: var(--shadow-hover);
+  animation: fadeIn 200ms ease both;
+}
+
+/* ── Action buttons row ──────────────────────────────────────── */
+.movie-card__buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.movie-card__circle-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
+  background: transparent;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.movie-card__circle-btn:hover {
+  border-color: var(--text-white);
+  background: rgba(255,255,255,.1);
+}
+
+.movie-card__circle-btn--play {
+  background: var(--text-white);
+  border-color: var(--text-white);
+  color: #141414;
+}
+
+.movie-card__circle-btn--play:hover {
+  background: #ccc;
+}
+
+/* ── Meta badges ─────────────────────────────────────────────── */
+.movie-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.mc-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(255,255,255,.1);
+  color: var(--text-primary);
+}
+
+.mc-badge--fresh {
+  color: var(--fresh);
+  border: 1px solid var(--fresh);
+  background: rgba(108,192,74,.1);
+}
+
+.mc-badge--rotten {
+  color: var(--rotten);
+  border: 1px solid var(--rotten);
+  background: rgba(250,50,10,.1);
+}
+
+.mc-badge--rating {
+  color: var(--star);
+}
+
+.mc-badge--likes {
+  color: var(--text-secondary);
+}
+
+/* ── Description ─────────────────────────────────────────────── */
+.movie-card__desc {
+  font-size: 0.6rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+/* ── Genres ───────────────────────────────────────────────────── */
+.movie-card__genres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.movie-card__genre-dot {
+  font-size: 0.6rem;
+  color: var(--text-primary);
+  position: relative;
+}
+
+.movie-card__genre-dot + .movie-card__genre-dot::before {
+  content: '·';
+  position: absolute;
+  left: -5px;
+  color: var(--text-muted);
+}
