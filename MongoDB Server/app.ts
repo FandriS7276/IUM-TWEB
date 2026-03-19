@@ -10,6 +10,7 @@ import cron from 'node-cron';
 import http from 'http';
 
 import corsOptions from './config/cors';
+import { authenticateToken } from './config/auth';
 import { initSocket } from './services/socket';
 import connectDB from './database/dbConnect';
 import { syncAllMovieTitles } from './services/movieCache';
@@ -62,6 +63,10 @@ app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
+
+// JWT authentication — runs on every request but only attaches req.user
+// when a valid Bearer token is present. Does NOT block unauthenticated requests.
+app.use(authenticateToken);
 
 // Routes
 app.use('/api', apiRouter);
