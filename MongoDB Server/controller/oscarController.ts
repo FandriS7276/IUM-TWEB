@@ -226,7 +226,11 @@ export const getControversialOscarWinners = async (req: Request, res: Response):
             metadata: { fetchedAt: new Date().toISOString(), resultCount: controversial.length }
         };
 
-        await client.set(CONTROVERSIAL_CACHE_KEY, JSON.stringify(response), { EX: CONTROVERSIAL_CACHE_TTL });
+        // Only cache non-empty results — caching an empty response would lock out
+        // real data until TTL expires if the aggregation ran before data was ready.
+        if (controversial.length > 0) {
+            await client.set(CONTROVERSIAL_CACHE_KEY, JSON.stringify(response), { EX: CONTROVERSIAL_CACHE_TTL });
+        }
         res.json(response);
     } catch (err) {
         handleError(res, err as Error & { status?: number }, 'Failed to retrieve controversial winners');
@@ -290,7 +294,10 @@ export const getMostNominatedMovies = async (req: Request, res: Response): Promi
                 stats: enriched[i].stats
             }));
 
-            await client.set(NOMINATED_CACHE_KEY, JSON.stringify(allData), { EX: CACHE_TTL_SECONDS });
+            // Only persist non-empty results to avoid caching a cold-start miss
+            if (allData.length > 0) {
+                await client.set(NOMINATED_CACHE_KEY, JSON.stringify(allData), { EX: CACHE_TTL_SECONDS });
+            }
         }
 
         const total = allData.length;
@@ -339,7 +346,10 @@ export const getSnubbedMovies = async (req: Request, res: Response): Promise<voi
             enriched.sort((a, b) => b.stats.tomatometer - a.stats.tomatometer);
             allData = enriched;
 
-            await client.set(SNUBBED_CACHE_KEY, JSON.stringify(allData), { EX: CACHE_TTL_SECONDS });
+            // Only persist non-empty results to avoid caching a cold-start miss
+            if (allData.length > 0) {
+                await client.set(SNUBBED_CACHE_KEY, JSON.stringify(allData), { EX: CACHE_TTL_SECONDS });
+            }
         }
 
         const total = allData.length;
