@@ -25,13 +25,36 @@ export const getReviews = async (req: Request, res: Response): Promise<void> => 
     try {
         const { page, limit, skip } = extractPagination(req.query);
 
-        const { review_type, top_critic, from_date, to_date, sortBy } =
+        const { review_type, top_critic, from_date, to_date, sortBy, movie_title } =
             req.query as Record<string, string | undefined>;
 
         const filter: Record<string, unknown> = {};
         let mongoSort: MongoSortObject = { review_date: -1 };  // Default: newest first
 
         // ── Filters ──────────────────────────────────────────────────────────
+
+        if (movie_title) {
+            // ── Input hardening ───────────────────────────────────────────────
+            // Reject blank-after-trim or suspiciously long titles before they
+            // reach the database. Real movie titles are well under 200 characters;
+            // anything longer is either malformed input or a probing attempt.
+            const trimmed = movie_title.trim();
+            if (!trimmed) {
+                res.status(400).json({ success: false, message: 'movie_title cannot be blank' });
+                return;
+            }
+            if (trimmed.length > 200) {
+                res.status(400).json({ success: false, message: 'movie_title exceeds maximum length of 200 characters' });
+                return;
+            }
+
+            // Escape all special regex metacharacters so user input is treated
+            // as a literal string, not a regex pattern (prevents ReDoS).
+            // The `^...$` anchors enforce exact match so "Alien" doesn't also
+            // return "Aliens". The index on movie_title handles the O(log n) lookup.
+            const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            filter.movie_title = { $regex: new RegExp(`^${escaped}$`, 'i') };
+        }
 
         if (review_type) {
             if (!['Fresh', 'Rotten'].includes(review_type)) {
@@ -96,7 +119,7 @@ export const getReviews = async (req: Request, res: Response): Promise<void> => 
         const total = await RottenReview.countDocuments(filter);
 
         res.status(200).json(buildPaginatedResponse(reviews, total, page, limit, {
-            appliedFilters: { review_type, top_critic, from_date, to_date },
+            appliedFilters: { movie_title, review_type, top_critic, from_date, to_date },
             appliedSort:    sortBy || 'review_date-desc'
         }));
     } catch (err) {
