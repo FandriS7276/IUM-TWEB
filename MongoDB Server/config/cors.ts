@@ -16,11 +16,39 @@
 import 'dotenv/config';
 import { CorsOptions } from 'cors';
 
-// Only the frontend origin is allowed — everything else gets a CORS error.
-// Undefined entries are filtered out at runtime (handles missing .env gracefully).
-const allowedOrigins: (string | undefined)[] = [
+// Build the allowed-origins list from environment variables.
+//
+// FRONTEND_URL   → Primary frontend origin.
+//                  Set to your deployed URL on Render (e.g. https://neview.vercel.app).
+//                  Set to http://localhost:5173 in your local .env when running
+//                  the backend locally.
+//
+// EXTRA_ORIGINS  → Optional comma-separated list of *additional* origins.
+//                  Use this on Render to also allow your local dev machine:
+//                    EXTRA_ORIGINS=http://localhost:5173,http://localhost:3000
+//                  This is intentional — a Render free-tier project means you
+//                  are the only one with the API URL, so allowing localhost is
+//                  an acceptable trade-off for development convenience.
+//
+// Automatically added in non-production environments (local backend run):
+//   localhost:5173 (Vite default) and localhost:3000 (CRA / other ports).
+//
+// All undefined / empty entries are filtered out so a missing env var never
+// causes an accidental wildcard allow.
+const allowedOrigins: string[] = [
     process.env.FRONTEND_URL,
-];
+
+    // EXTRA_ORIGINS: comma-separated list of additional origins (works in all envs,
+    // including production on Render — useful for allowing localhost when developing
+    // the frontend against the live backend).
+    ...(process.env.EXTRA_ORIGINS ?? '').split(',').map(o => o.trim()),
+
+    // Auto-allow localhost in non-production environments (running the backend
+    // locally). These are never included when NODE_ENV=production on Render.
+    ...(process.env.NODE_ENV !== 'production'
+        ? ['http://localhost:5173', 'http://localhost:3000']
+        : []),
+].filter((o): o is string => Boolean(o));
 
 const corsOptions: CorsOptions = {
     origin: (origin, callback) => {
