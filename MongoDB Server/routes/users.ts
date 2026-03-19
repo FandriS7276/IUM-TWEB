@@ -1,10 +1,7 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router } from 'express';
 
 const router = Router();
 
-// TODO stub - implement when ready
-router.get('/', (req: Request, res: Response, next: NextFunction) => {
-    res.send('respond with a resource');
-});
+// TODO: implement user routes (profile, login, register)
 
 export default router;
