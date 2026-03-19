@@ -109,8 +109,9 @@ export async function refreshDailyPopularity(): Promise<void> {
             pipe.get(`counter:daily:views:${t}`);
             pipe.get(`counter:daily:likes:${t}`);
         });
-        // exec() returns results in the same order commands were queued
-        const raw = (await pipe.exec()) as unknown as (string | null)[];
+        // exec() returns results in the same order commands were queued;
+        // map to string | null, treating any pipeline Error as a missing value
+        const raw = (await pipe.exec()).map(r => (r instanceof Error ? null : r) as string | null);
 
         const scoreMap: Record<string, number> = {};
         let idx = 0;
@@ -163,7 +164,7 @@ export async function refreshWeeklyPopularity(): Promise<void> {
             pipe.get(`counter:weekly:views:${t}`);
             pipe.get(`counter:weekly:likes:${t}`);
         });
-        const raw = (await pipe.exec()) as unknown as (string | null)[];
+        const raw = (await pipe.exec()).map(r => (r instanceof Error ? null : r) as string | null);
 
         const scoreMap: Record<string, number> = {};
         let idx = 0;
