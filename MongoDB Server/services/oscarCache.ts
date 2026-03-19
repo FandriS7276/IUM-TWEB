@@ -53,18 +53,6 @@ export async function refreshNominatedCache(): Promise<string[] | undefined> {
     }
 }
 
-/** Returns nominated-but-not-winning titles. Rebuilds the cache if empty. */
-export async function getNominatedTitles(): Promise<string[]> {
-    try {
-        const titles = await client.sMembers(NOMINATED_KEY);
-        if (titles.length === 0) return (await refreshNominatedCache()) ?? [];
-        return titles;
-    } catch (err) {
-        console.error('Error getting nominated titles:', (err as Error).message);
-        return [];
-    }
-}
-
 // ─── Valid categories (live, in-memory) ──────────────────────────────────────
 
 /**
