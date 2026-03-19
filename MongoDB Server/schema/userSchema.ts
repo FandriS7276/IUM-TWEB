@@ -9,7 +9,7 @@
  * with no translation layer needed.
  *
  * Password security — two layers:
- *   1. Bcrypt hashing (pre-save hook): the raw password is hashed before storage,
+ *   1. Argon2id hashing (pre-save hook): the raw password is hashed before storage,
  *      so even a database admin only sees the digest, not the original password.
  *   2. `select: false` + toJSON transform: the hash field is excluded from every
  *      query and JSON response by default, so it can never leak through the API.
@@ -17,8 +17,8 @@
  */
 
 import { Schema, model, Document } from 'mongoose';
-// bcryptjs is used only in this file: for hashing on save and comparing on login
-import bcrypt from 'bcryptjs';
+// argon2 is used only in this file: for hashing on save and comparing on login
+import argon2 from 'argon2';
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -29,7 +29,7 @@ import bcrypt from 'bcryptjs';
 export interface IUser {
     email: string;
     username: string;
-    /** Bcrypt hash of the password — the raw password is never stored. */
+    /** Argon2id hash of the password — the raw password is never stored. */
     passwordHash: string;
     /**
      * Top-critic toggle. Same field name as in rottenSchema so that
@@ -56,9 +56,9 @@ export interface IUser {
  */
 export interface IUserDocument extends IUser, Document {
     /**
-     * Compares a plain-text password attempt against the stored bcrypt hash.
+     * Compares a plain-text password attempt against the stored argon2 hash.
      * Returns true on match, false otherwise. Always use this at login —
-     * never call bcrypt.compare() directly in controllers.
+     * never call argon2.verify() directly in controllers.
      */
     verifyPassword(passwordAttempt: string): Promise<boolean>;
     createdAt: Date;
@@ -112,10 +112,10 @@ const userSchema = new Schema<IUserDocument>(
 /**
  * Intercepts every `.save()` call and hashes the password before persistence.
  *
- * Why bcrypt with cost 12?
- *   Bcrypt is purpose-built for passwords: it is intentionally slow and adds
- *   a unique salt per hash. Cost 12 means 2^12 hashing rounds — enough to
- *   make brute-force attacks impractical while staying fast enough for users.
+ * Why argon2id?
+ *   Argon2id is the current best-practice for password hashing: it is memory-hard
+ *   (defeating GPU brute-force), includes a unique salt automatically, and
+ *   was the winner of the Password Hashing Competition. It supersedes bcrypt.
  *
  * Why check `isModified`?
  *   Re-saving a user for unrelated reasons (e.g. updating bio) must NOT
@@ -124,16 +124,15 @@ const userSchema = new Schema<IUserDocument>(
 userSchema.pre('save', async function (this: IUserDocument) {
     if (!this.isModified('passwordHash')) return;
 
-    const salt = await bcrypt.genSalt(12);
-    this.passwordHash = await bcrypt.hash(this.passwordHash, salt);
+    this.passwordHash = await argon2.hash(this.passwordHash);
 });
 
 // ─── Instance method ─────────────────────────────────────────────────────────
 
 userSchema.methods.verifyPassword = async function (passwordAttempt: string): Promise<boolean> {
-    // bcrypt.compare internally re-derives the salt from the stored hash,
+    // argon2.verify extracts the salt and params from the stored hash string,
     // so it can compare without ever needing to store the original password
-    return bcrypt.compare(passwordAttempt, this.passwordHash);
+    return argon2.verify(this.passwordHash, passwordAttempt);
 };
 
 export default model<IUserDocument>('User', userSchema);
