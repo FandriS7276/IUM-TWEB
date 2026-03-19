@@ -19,7 +19,7 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { body, validationResult } from 'express-validator';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import RottenReview from '../schema/rottenSchema';
 import client from '../database/redisClient';
 
@@ -50,7 +50,7 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction): vo
 export const writeLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max:      5,
-    keyGenerator: (req: Request) => req.user?.id || req.ip || 'unknown',
+    keyGenerator: (req: Request) => req.user?.id || ipKeyGenerator(req.ip ?? '') || 'unknown',
     message:  { success: false, message: 'Too many reviews submitted. Wait 15 minutes.' }
 });
 
