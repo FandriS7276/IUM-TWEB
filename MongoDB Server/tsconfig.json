@@ -12,6 +12,7 @@
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
         "moduleResolution": "node",
+        "typeRoots": ["./types", "./node_modules/@types"],
         "declaration": true,
         "sourceMap": true,
         "noUnusedLocals": false,
