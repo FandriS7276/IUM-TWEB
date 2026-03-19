@@ -90,7 +90,10 @@ initSocket(server);
 (async () => {
     try {
         await connectDB();
-        await syncAllMovieTitles();
+        // TODO - temporary catch till SQL server deploy
+        await syncAllMovieTitles().catch((err) => {
+            console.warn('Movie title sync skipped (non-fatal):', (err as Error).message);
+        });
         await initCategoryWatcher();
 
         const PORT = process.env.PORT || 4000;
