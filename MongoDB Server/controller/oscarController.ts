@@ -207,9 +207,17 @@ export const getControversialOscarWinners = async (req: Request, res: Response):
                 {
                     $lookup: {
                         from: 'rottenCollection',
-                        let: { filmTitle: { $toLower: '$film' } },
+                        // Keep the original casing — $regexMatch with 'i' handles
+                        // case-insensitivity without the $toLower overhead on both sides.
+                        let: { filmTitle: '$film' },
                         pipeline: [
-                            { $match: { $expr: { $eq: [{ $toLower: '$movie_title' }, '$$filmTitle'] } } },
+                            // $regexMatch is cleaner than $toLower + $eq and avoids
+                            // computing a lowercase string for every doc in the join.
+                            // Note: $expr in a $lookup pipeline still can't use the
+                            // collation index — a future refactor to a single-query
+                            // approach (fetch all winners → $in lookup) would eliminate
+                            // this limitation entirely.
+                            { $match: { $expr: { $regexMatch: { input: '$movie_title', regex: '$$filmTitle', options: 'i' } } } },
                             { $match: { review_type: 'Rotten' } },
                             { $limit: 5 }
                         ],
