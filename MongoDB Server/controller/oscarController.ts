@@ -17,6 +17,19 @@ const ALLOWED_OSCAR_SORT_FIELDS = [
     'film'
 ];
 
+interface ControversialWinner {
+    year: number;
+    category: string;
+    film: string;
+    winner: boolean;
+    rotten_count: number;
+    rotten_reviews: Array<{
+        title: string;
+        score: string;
+        content: string;
+    }>;
+}
+
 interface OscarGrouped {
     film: string;
     year_film: number;
@@ -179,59 +192,73 @@ const CONTROVERSIAL_CACHE_TTL = 60 * 60; // 1 hour
 
 export const getControversialOscarWinners = async (req: Request, res: Response): Promise<void> => {
     try {
+        const { page, limit, skip } = extractPagination(req.query);
+
+        let allData: ControversialWinner[] | null = null;
+
         const cached = await client.get(CONTROVERSIAL_CACHE_KEY);
         if (cached) {
-            res.json(JSON.parse(cached));
-            return;
-        }
-
-        const controversial = await OscarModel.aggregate([
-            { $match: { winner: true } },
-            {
-                $lookup: {
-                    from: 'rottenCollection',
-                    let: { filmTitle: { $toLower: '$film' } },
-                    pipeline: [
-                        { $match: { $expr: { $eq: [{ $toLower: '$movie_title' }, '$$filmTitle'] } } },
-                        { $match: { review_type: 'Rotten' } },
-                        { $limit: 5 }
-                    ],
-                    as: 'rotten_reviews'
-                }
-            },
-            { $match: { 'rotten_reviews.0': { $exists: true } } },
-            { $addFields: { rotten_count: { $size: '$rotten_reviews' } } },
-            { $sort: { rotten_count: -1 } },
-            { $limit: 20 },
-            {
-                $project: {
-                    year: '$year_film',
-                    category: 1,
-                    film: 1,
-                    winner: 1,
-                    rotten_reviews: {
-                        $map: {
-                            input: '$rotten_reviews',
-                            as: 'r',
-                            in: { title: '$$r.movie_title', score: '$$r.review_score', content: '$$r.review_content' }
+            allData = JSON.parse(cached) as ControversialWinner[];
+        } else {
+            // Run the full aggregation without $limit so the complete sorted
+            // result is cached in Redis. Pagination is applied in-memory below.
+            const controversial = await OscarModel.aggregate([
+                { $match: { winner: true } },
+                {
+                    $lookup: {
+                        from: 'rottenCollection',
+                        let: { filmTitle: { $toLower: '$film' } },
+                        pipeline: [
+                            { $match: { $expr: { $eq: [{ $toLower: '$movie_title' }, '$$filmTitle'] } } },
+                            { $match: { review_type: 'Rotten' } },
+                            { $limit: 5 }
+                        ],
+                        as: 'rotten_reviews'
+                    }
+                },
+                { $match: { 'rotten_reviews.0': { $exists: true } } },
+                { $addFields: { rotten_count: { $size: '$rotten_reviews' } } },
+                { $sort: { rotten_count: -1 } },
+                {
+                    $project: {
+                        year: '$year_film',
+                        category: 1,
+                        film: 1,
+                        winner: 1,
+                        rotten_count: 1,
+                        rotten_reviews: {
+                            $map: {
+                                input: '$rotten_reviews',
+                                as: 'r',
+                                in: { title: '$$r.movie_title', score: '$$r.review_score', content: '$$r.review_content' }
+                            }
                         }
                     }
                 }
+            ]);
+
+            allData = controversial;
+
+            // Only cache non-empty results — caching an empty response would lock out
+            // real data until TTL expires if the aggregation ran before data was ready.
+            if (allData.length > 0) {
+                await client.set(CONTROVERSIAL_CACHE_KEY, JSON.stringify(allData), { EX: CONTROVERSIAL_CACHE_TTL });
             }
-        ]);
-
-        const response = {
-            success: true,
-            data: controversial,
-            metadata: { fetchedAt: new Date().toISOString(), resultCount: controversial.length }
-        };
-
-        // Only cache non-empty results — caching an empty response would lock out
-        // real data until TTL expires if the aggregation ran before data was ready.
-        if (controversial.length > 0) {
-            await client.set(CONTROVERSIAL_CACHE_KEY, JSON.stringify(response), { EX: CONTROVERSIAL_CACHE_TTL });
         }
-        res.json(response);
+
+        if (!allData || allData.length === 0) {
+            res.json(emptyPaginatedResponse(limit));
+            return;
+        }
+
+        const total = allData.length;
+        const paginated = allData.slice(skip, skip + limit);
+
+        res.json(
+            buildPaginatedResponse(paginated, total, page, limit, {
+                note: 'Sorted by rotten review count descending'
+            })
+        );
     } catch (err) {
         handleError(res, err as Error & { status?: number }, 'Failed to retrieve controversial winners');
     }
