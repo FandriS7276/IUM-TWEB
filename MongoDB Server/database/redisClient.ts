@@ -17,25 +17,23 @@
 
 import { createClient } from 'redis';
 import 'dotenv/config';
-/*
-const client = createClient({
-    // REDIS_URL from .env, e.g. "redis://localhost:6379"
-    url: process.env.REDIS_URL,
-    socket: {
-        // Exponential backoff: wait 100 ms after the 1st retry, 200 ms after the 2nd, etc.
-        // Capped at 3000 ms so the client doesn't wait too long between attempts
-        reconnectStrategy: (retries: number) => Math.min(retries * 100, 3000),
-    },
-});
-*/
-const client = createClient({
-    username: 'default',
-    password: process.env.REDIS_PASS,
-    socket: {
-        host: 'redis-19946.crce218.eu-central-1-1.ec2.cloud.redislabs.com',
-        port: 19946
-    }
-});
+const isProduction = process.env.NODE_ENV === 'production';
+
+const client = isProduction
+    ? createClient({
+        username: 'default',
+        password: process.env.REDIS_PASS,
+        socket: {
+            host: 'redis-19946.crce218.eu-central-1-1.ec2.cloud.redislabs.com',
+            port: 19946,
+        },
+    })
+    : createClient({
+        url: process.env.REDIS_URL ?? 'redis://localhost:6379',
+        socket: {
+            reconnectStrategy: (retries: number) => Math.min(retries * 100, 3000),
+        },
+    });
 
 client.on('error',       (err: Error) => console.error('Redis Client Error', err));
 client.on('connect',     ()           => console.log('Redis connected 🔥'));
