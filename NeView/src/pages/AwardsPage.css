@@ -48,6 +48,94 @@
   border-color: var(--star);
 }
 
+/* Filters */
+.awards-filters {
+  margin-bottom: var(--space-xl);
+  padding: var(--space-lg);
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+}
+
+.awards-filters__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
+.awards-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 160px;
+  min-width: 140px;
+}
+
+.awards-filter__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.awards-filter__select,
+.awards-filter__input {
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  color: var(--text-white);
+  background: var(--bg-main);
+  border: 1px solid var(--border-subtle);
+  transition: border-color var(--transition-fast);
+  appearance: auto;
+}
+
+.awards-filter__select:focus,
+.awards-filter__input:focus {
+  outline: none;
+  border-color: var(--star);
+}
+
+.awards-filter__input::placeholder {
+  color: var(--text-muted);
+}
+
+/* ── Active filter state — warm cinematic red tones ─────────── *
+ * Mirrors the MovieDetailPage filter palette for site-wide      *
+ * consistency: burgundy fill, muted rose text, soft red border. */
+.awards-filter__select--active,
+.awards-filter__input--active {
+  background: rgba(180, 28, 28, 0.18);
+  border-color: rgba(200, 60, 60, 0.50);
+  color: #f2cece;
+}
+
+.awards-filter__select--active:focus,
+.awards-filter__input--active:focus {
+  border-color: rgba(229, 9, 20, 0.75);
+  background: rgba(180, 28, 28, 0.26);
+  color: #fadadd;
+}
+
+.awards-filters__reset {
+  margin-top: var(--space-md);
+  padding: 6px 16px;
+  border-radius: 16px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.awards-filters__reset:hover {
+  color: var(--star);
+  border-color: var(--star);
+}
+
 /* Grid */
 .awards-grid {
   display: grid;
@@ -117,6 +205,50 @@
 .award-card__cat--won {
   background: rgba(245, 197, 24, .15);
   color: var(--star);
+}
+
+/* Pagination */
+.awards-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-lg);
+  padding: var(--space-lg) 0;
+}
+
+.awards-pagination__btn {
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-white);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.awards-pagination__btn:hover:not(:disabled) {
+  border-color: var(--star);
+  color: var(--star);
+}
+
+.awards-pagination__btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.awards-pagination__info {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.awards-pagination__total {
+  margin-left: var(--space-xs);
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 0.8rem;
 }
 
 .awards-page__note {
