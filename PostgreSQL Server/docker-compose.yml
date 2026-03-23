@@ -1,0 +1,25 @@
+# ==============================================================================
+# docker-compose.yml — PostgreSQL Server (Spring Boot)
+#
+# Reads credentials and config from .env automatically.
+# Usage:
+#   docker compose up --build        # build image and start
+#   docker compose up                # start with existing image
+#   docker compose down              # stop and remove containers
+# ==============================================================================
+
+services:
+  api:
+    build: .
+    ports:
+      - "${PORT:-8080}:8080"
+    env_file:
+      - .env
+    environment:
+      # These map .env keys to exactly what application.properties expects
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+    restart: unless-stopped
