@@ -310,6 +310,106 @@
   background: var(--accent-hover);
 }
 
+/* ── Review type accent on left border ──────────────────────── */
+.md-review--fresh  { border-left-color: var(--fresh);  }
+.md-review--rotten { border-left-color: var(--rotten); }
+
+/* ── Review Filter / Sort Toolbar ───────────────────────────── */
+.md-reviews-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+}
+
+.md-reviews-toolbar__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  flex: 1;
+}
+
+/* Individual filter label + control */
+.md-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 130px;
+  min-width: 120px;
+}
+
+.md-filter__label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.md-filter__select,
+.md-filter__input {
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+  color: var(--text-white);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  transition: border-color var(--transition-fast);
+  appearance: auto;
+}
+
+.md-filter__select:focus,
+.md-filter__input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.md-filter__input::placeholder {
+  color: var(--text-muted);
+}
+
+/* ── Active filter state — warm cinematic red tones ─────────── *
+ * Applied when a filter has a non-default value selected.       *
+ * Palette: deep burgundy background, muted rose text,           *
+ * soft crimson border — warm and inviting, not cold/techno.     */
+.md-filter__select--active,
+.md-filter__input--active {
+  background: rgba(180, 28, 28, 0.18);
+  border-color: rgba(200, 60, 60, 0.50);
+  color: #f2cece;
+}
+
+.md-filter__select--active:focus,
+.md-filter__input--active:focus {
+  border-color: rgba(229, 9, 20, 0.75);
+  background: rgba(180, 28, 28, 0.26);
+  color: #fadadd;
+}
+
+.md-reviews-toolbar__reset {
+  padding: 7px 16px;
+  border-radius: 16px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+  align-self: flex-end;
+}
+
+.md-reviews-toolbar__reset:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 /* ── Reviews List ────────────────────────────────────────────── */
 .md-reviews-list {
   display: flex;
@@ -448,6 +548,142 @@
 .md-chat__send:disabled {
   opacity: .4;
   cursor: not-allowed;
+}
+
+/* ── Shared sub-heading ──────────────────────────────────────── */
+.md-sub-heading {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-md);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Movie Info Grid (Themes, Countries, Studios, Languages) ── */
+.md-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: var(--space-xl);
+}
+
+.md-info-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* ── Tag List (for genres, themes, countries, studios) ────────── */
+.md-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.md-tag {
+  display: inline-block;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.md-tag:hover {
+  background: var(--bg-hover);
+  border-color: var(--text-secondary);
+}
+
+.md-tag--studio {
+  background: rgba(180, 28, 28, 0.12);
+  border-color: rgba(200, 60, 60, 0.30);
+  color: #f2cece;
+}
+
+/* ── Language List ────────────────────────────────────────────── */
+.md-lang-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.md-lang-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 6px var(--space-md);
+  background: var(--bg-card);
+  border-radius: var(--radius-sm);
+}
+
+.md-lang-item__name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-white);
+}
+
+.md-lang-item__type {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: capitalize;
+}
+
+/* ── Releases Table ──────────────────────────────────────────── */
+.md-releases-table-wrapper {
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+}
+
+.md-releases-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.md-releases-table thead {
+  background: var(--bg-card);
+}
+
+.md-releases-table th {
+  padding: 10px var(--space-md);
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.md-releases-table td {
+  padding: 10px var(--space-md);
+  color: var(--text-primary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.md-releases-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.md-releases-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.md-release-rating {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: rgba(180, 28, 28, 0.15);
+  color: #f2cece;
 }
 
 /* ── Responsive ──────────────────────────────────────────────── */
