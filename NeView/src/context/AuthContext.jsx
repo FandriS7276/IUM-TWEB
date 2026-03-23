@@ -4,14 +4,19 @@
  * Global authentication state using React Context + useReducer.
  * Persists the JWT token in localStorage and exposes login / logout
  * helpers to the entire component tree via useAuth().
+ *
+ * On mount, if a stored token exists, validates it by calling
+ * GET /user/profile. If the token is expired/invalid, clears
+ * stored credentials and treats the user as logged out.
  */
 import { createContext, useContext, useReducer, useEffect } from 'react';
+import { authAPI } from '../services/api';
 
 // ── State shape ─────────────────────────────────────────────────
 const initialState = {
   user: null,       // { id, username, email, top_critic, avatar, bio }
   token: null,
-  isLoading: true,  // true while we check localStorage on mount
+  isLoading: true,  // true while we validate the stored token on mount
 };
 
 // ── Reducer: immutable state transitions ────────────────────────
@@ -36,23 +41,37 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // Hydrate from localStorage on first mount
+  /**
+   * Hydrate from localStorage on first mount.
+   *
+   * Instead of blindly trusting the stored user JSON, we validate
+   * the token by hitting GET /user/profile. This ensures:
+   *   - Expired tokens don't keep the user "logged in" with stale data.
+   *   - The user object always reflects the latest server state.
+   */
   useEffect(() => {
     const token = localStorage.getItem('nv_token');
-    const userJson = localStorage.getItem('nv_user');
 
-    if (token && userJson) {
-      try {
-        const user = JSON.parse(userJson);
-        dispatch({ type: 'LOGIN', payload: { user, token } });
-      } catch {
+    if (!token) {
+      dispatch({ type: 'LOADED' });
+      return;
+    }
+
+    authAPI
+      .getProfile()
+      .then(({ data }) => {
+        // Server confirmed the token is valid — populate state
+        dispatch({
+          type: 'LOGIN',
+          payload: { user: data.user, token },
+        });
+      })
+      .catch(() => {
+        // Token invalid or backend unreachable — clean up and show logged-out state
         localStorage.removeItem('nv_token');
         localStorage.removeItem('nv_user');
         dispatch({ type: 'LOADED' });
-      }
-    } else {
-      dispatch({ type: 'LOADED' });
-    }
+      });
   }, []);
 
   // ── Action creators ───────────────────────────────────────────
