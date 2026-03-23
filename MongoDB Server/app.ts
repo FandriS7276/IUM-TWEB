@@ -17,6 +17,7 @@ import { syncAllMovieTitles } from './services/movieCache';
 import { refreshDailyPopularity, refreshWeeklyPopularity } from './services/popularityCache';
 import { initCategoryWatcher } from './services/oscarCache';
 import apiRouter from './routes/index';
+import { refreshSnubbedCache } from './services/snubbedCache';
 
 // Cron scheduler - refreshes daily and weekly caches
 cron.schedule('5 0 * * *', async () => {
@@ -100,6 +101,7 @@ initSocket(server);
             console.warn('Movie title sync skipped (non-fatal):', (err as Error).message);
         });*/
         await initCategoryWatcher();
+        await refreshSnubbedCache();
 
         const PORT = process.env.PORT || 4000;
         server.listen(PORT, () => {
