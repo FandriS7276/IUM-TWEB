@@ -1,6 +1,9 @@
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = 'http://localhost:4000'; // change to production URL later
+// Falls back to localhost:4000 when running outside Docker (plain `npm run dev`).
+// VITE_SOCKET_URL is injected by docker-compose for the containerised dev environment.
+// Note: Socket.io connects to the server root — no /api prefix needed here.
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:4000';
 
 // Singleton socket instance (only one connection)
 let socket = null;
