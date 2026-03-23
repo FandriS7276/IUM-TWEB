@@ -4,6 +4,8 @@
  * Full-screen sign-in form with a cinematic background.
  * On successful login the JWT + user data are persisted
  * via AuthContext and the user is redirected home.
+ *
+ * No demo mode — requires a real backend connection.
  */
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -34,14 +36,9 @@ export default function SignInPage() {
       login(data.user, data.token);
       navigate('/');
     } catch (err) {
-      // Graceful placeholder fallback when backend isn't running
-      if (err.code === 'ERR_NETWORK' || err.response?.status === 404) {
-        // Demo mode: fake login so the UI can be explored
-        login(
-          { id: 'demo', username: form.email.split('@')[0] || 'demo', email: form.email, top_critic: false },
-          'demo-token'
-        );
-        navigate('/');
+      // Map specific backend error messages to user-friendly feedback
+      if (err.code === 'ERR_NETWORK') {
+        setError('Unable to connect to the server. Please check if the backend is running.');
       } else {
         setError(err.response?.data?.message || 'Invalid credentials. Please try again.');
       }

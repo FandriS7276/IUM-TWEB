@@ -1,8 +1,11 @@
 /**
  * SignUpPage
  * -----------
- * Registration form with username, email, password, and optional
- * "top critic" toggle. Mirrors the SignIn layout for consistency.
+ * Registration form with username, email, password, and confirmation.
+ * On successful registration the JWT + user data are persisted
+ * via AuthContext and the user is redirected home.
+ *
+ * No demo mode — requires a real backend connection.
  */
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -26,6 +29,7 @@ export default function SignUpPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // ── Client-side validation ──────────────────────────────────
     if (form.password !== form.confirmPassword) {
       setError('Passwords do not match.');
       return;
@@ -48,13 +52,8 @@ export default function SignUpPage() {
       login(data.user, data.token);
       navigate('/');
     } catch (err) {
-      if (err.code === 'ERR_NETWORK' || err.response?.status === 404) {
-        // Demo mode fallback
-        login(
-          { id: 'demo', username: form.username, email: form.email, top_critic: false },
-          'demo-token'
-        );
-        navigate('/');
+      if (err.code === 'ERR_NETWORK') {
+        setError('Unable to connect to the server. Please check if the backend is running.');
       } else {
         setError(err.response?.data?.message || 'Registration failed. Please try again.');
       }

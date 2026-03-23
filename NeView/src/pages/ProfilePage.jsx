@@ -1,16 +1,21 @@
 /**
  * ProfilePage
  * -------------
- * Simple user profile view with avatar, bio, and placeholder
- * sections for review history and watchlist.
+ * Authenticated user profile view with avatar, bio, and
+ * sections for review history. Fetches profile data from
+ * GET /user/profile on mount.
  */
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import { User, Star, MessageCircle, Film, Settings } from '../components/Icons';
+import { reviewsAPI } from '../services/api';
 import './ProfilePage.css';
 
 export default function ProfilePage() {
   const { user } = useAuth();
+  const [userReviews, setUserReviews] = useState([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
 
   // Redirect to sign-in if not authenticated
   if (!user) return <Navigate to="/signin" replace />;
@@ -41,7 +46,7 @@ export default function ProfilePage() {
         <div className="profile-stats">
           <div className="profile-stat">
             <MessageCircle size={20} />
-            <span className="profile-stat__value">0</span>
+            <span className="profile-stat__value">{userReviews.length}</span>
             <span className="profile-stat__label">Reviews</span>
           </div>
           <div className="profile-stat">
@@ -56,14 +61,49 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Placeholder sections */}
+        {/* Reviews section */}
         <section className="profile-section">
           <h2 className="profile-section__title">My Reviews</h2>
-          <p className="profile-section__empty">
-            Your reviews will appear here once the backend is fully connected.
-          </p>
+          {userReviews.length > 0 ? (
+            <div className="md-reviews-list">
+              {userReviews.map((r) => (
+                <div key={r._id} className="md-review">
+                  <div className="md-review__header">
+                    <span
+                      className={`md-review__type ${
+                        r.review_type === 'Fresh'
+                          ? 'md-review__type--fresh'
+                          : 'md-review__type--rotten'
+                      }`}
+                    >
+                      {r.review_type === 'Fresh' ? '🍅' : '🤢'}
+                    </span>
+                    <div>
+                      <p className="md-review__critic">{r.movie_title}</p>
+                      <p className="md-review__pub">
+                        {r.review_date
+                          ? new Date(r.review_date).toLocaleDateString()
+                          : ''}
+                      </p>
+                    </div>
+                    {r.review_score && (
+                      <span className="md-review__score">{r.review_score}</span>
+                    )}
+                  </div>
+                  <p className="md-review__content">{r.review_content}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="profile-section__empty">
+              {loadingReviews
+                ? 'Loading your reviews...'
+                : 'You haven\'t written any reviews yet.'}
+            </p>
+          )}
         </section>
 
+        {/* Watchlist section */}
         <section className="profile-section">
           <h2 className="profile-section__title">Watchlist</h2>
           <p className="profile-section__empty">
