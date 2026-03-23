@@ -373,6 +373,7 @@ public class MovieService {
          * @param movieId integer movie ID (obtained from Tier 1 slim data)
          */
         public MovieHoverDTO getHoverData(Integer movieId) {
+                if (movieId == null) throw new MovieNotFoundException("id=null", List.of());
                 Movie movie = movieRepository.findById(movieId)
                         .orElseThrow(() -> new MovieNotFoundException(
                                 "id=" + movieId, List.of()));
@@ -409,6 +410,7 @@ public class MovieService {
          * @param movieId integer movie ID
          */
         public MovieCardDTO getExpandedData(Integer movieId) {
+                if (movieId == null) throw new MovieNotFoundException("id=null", List.of());
                 Movie movie = movieRepository.findById(movieId)
                         .orElseThrow(() -> new MovieNotFoundException(
                                 "id=" + movieId, List.of()));
