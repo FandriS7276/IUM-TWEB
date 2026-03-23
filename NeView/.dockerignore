@@ -1,0 +1,33 @@
+# ==============================================================================
+# .dockerignore — NeView
+# ==============================================================================
+# Files listed here are excluded from the Docker build context.
+# This speeds up builds and prevents secrets/junk from leaking into the image.
+# ==============================================================================
+
+# Dependencies — reinstalled inside the image via `npm install`
+node_modules
+
+# Production build output — not needed in the dev image
+dist
+
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Environment files — never bake secrets into an image!
+.env
+.env.*
+!.env.example
+
+# Editor / OS artefacts
+.DS_Store
+Thumbs.db
+.vscode
+.idea
+*.log
+
+# Docker files themselves (no need to copy them into the image)
+Dockerfile
+.dockerignore

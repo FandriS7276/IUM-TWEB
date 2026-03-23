@@ -1,0 +1,165 @@
+# ==============================================================================
+# docker-compose.yml — NeView Full Stack (Dev Environment)
+# ==============================================================================
+# Services:
+#   1. redis    — Redis 7 in-memory store      (port 6379)
+#   2. backend  — Express + TypeScript API     (port 4000)
+#   3. frontend — React + Vite (NeView)        (port 5173)
+#   4. pg-api   — Spring Boot REST API         (port 8080)
+#
+# MongoDB and PostgreSQL are NOT containerised in dev.
+# Both are reached from containers via host.docker.internal.
+#
+# Usage:
+#   Start all (first time / after code changes):  docker compose up --build
+#   Start all (subsequent times):                 docker compose up
+#   Stop all:                                     docker compose down
+#   Wipe Redis volume:                            docker compose down -v
+#   Rebuild one service only:                     docker compose up --build backend
+# ==============================================================================
+
+services:
+
+  # ── MongoDB (local — not containerised in dev) ────────────────────────────
+  # Your local mongod process (port 27017) already holds all your data.
+  # Containerising it would give you an empty database.
+  # The backend reaches it via host.docker.internal (see backend environment below).
+  # Uncomment this block only when you need a clean, isolated DB (e.g. CI/CD).
+  #
+  # mongodb:
+  #   image: mongo:7
+  #   container_name: neview_mongodb
+  #   ports:
+  #     - "27017:27017"
+  #   volumes:
+  #     - mongodb_data:/data/db
+  #   networks:
+  #     - neview_network
+  #   healthcheck:
+  #     test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+  # ── 2. Redis ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: neview_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    # No password in dev — matches your local Redis setup.
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - neview_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── 3. Backend (Express + TypeScript) ────────────────────────────────────────
+  backend:
+    build:
+      context: ./MongoDB Server             # Folder containing the backend Dockerfile
+      dockerfile: Dockerfile
+      target: development                   # Use the dev stage (nodemon + ts-node)
+    container_name: neview_backend
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    volumes:
+      # Bind-mount: local edits sync into the container — nodemon picks them up.
+      - ./MongoDB Server:/app
+      # Isolate container's node_modules from the host to avoid platform conflicts.
+      - /app/node_modules
+    # Load all variables from your existing .env file automatically.
+    env_file:
+      - ./MongoDB Server/.env
+    # host.docker.internal is a special Docker DNS name that always resolves
+    # to the IP of your host machine — i.e. your actual computer, not a container.
+    # This lets the backend reach services running natively on your machine.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # required on Linux; no-op on Mac/Windows
+    environment:
+      # Local .env:  mongodb://127.0.0.1:27017/dbconnect   ← 127.0.0.1 = container itself
+      # Docker:      host.docker.internal:27017             ← your real machine's MongoDB
+      # No credentials needed because your local mongod has no auth in dev.
+      MONGODB_URI: mongodb://host.docker.internal:27017/dbconnect
+
+      # Local .env:  redis://localhost:6379
+      # Docker:      redis://redis:6379  ← "redis" = the Redis container above
+      REDIS_URL: redis://redis:6379
+
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - neview_network
+
+  # ── 4. pg-api (Spring Boot REST API) ─────────────────────────────────────────
+  pg-api:
+    build:
+      context: ./PostgreSQL Server
+      dockerfile: Dockerfile
+    container_name: neview_pg_api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # required on Linux; no-op on Mac/Windows
+    env_file:
+      - ./PostgreSQL Server/.env
+    environment:
+      # Override DB_HOST so the container reaches your host machine's PostgreSQL,
+      # not the container's own localhost.
+      DB_HOST: host.docker.internal
+    networks:
+      - neview_network
+
+  # ── 5. Frontend (React + Vite — NeView) ──────────────────────────────────────
+  frontend:
+    build:
+      context: ./NeView
+      dockerfile: Dockerfile
+    container_name: neview_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./NeView:/app
+      - /app/node_modules
+    environment:
+      # Vite env vars MUST be prefixed with VITE_ to be exposed to the browser.
+      # /api is required — your axios baseURL uses this directly, and all routes
+      # live under /api/* on the backend. Without it every request would 404.
+      VITE_API_URL: http://localhost:4000/api
+
+      # PostgreSQL REST API (Spring Boot — movie catalog data)
+      VITE_POSTGRES_API_URL: http://localhost:8080/api
+
+      # Socket.io connects to the server root (no /api prefix) for the WS handshake
+      VITE_SOCKET_URL: http://localhost:4000
+
+      # Required for Vite HMR WebSocket to reconnect correctly inside Docker.
+      VITE_HMR_PORT: 5173
+
+    depends_on:
+      - backend                              # Start frontend after backend is up
+    networks:
+      - neview_network
+
+# ── Named Volumes ─────────────────────────────────────────────────────────────
+volumes:
+  redis_data:
+    driver: local
+  # mongodb_data is only needed when the mongodb service above is uncommented
+
+# ── Shared Network ────────────────────────────────────────────────────────────
+# All services live on this bridge network.
+# They resolve each other by service name (e.g. "mongodb", "redis", "backend").
+networks:
+  neview_network:
+    driver: bridge
