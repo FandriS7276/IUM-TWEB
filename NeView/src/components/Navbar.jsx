@@ -51,19 +51,19 @@ export default function Navbar() {
   return (
     <nav className={`navbar ${scrolled ? 'navbar--scrolled' : ''}`}>
       <div className="navbar__left">
-        {/* Logo */}
+        {/* Logo doubles as the Home button */}
         <Link to="/" className="navbar__logo">
           <span className="navbar__logo-text">N</span>eView
         </Link>
 
-        {/* Primary nav links */}
+        {/* Primary nav links — Reviews & Awards first, then genres */}
         <div className="navbar__links">
-          <Link to="/" className="navbar__link">Home</Link>
+          <Link to="/search" className="navbar__link">Reviews</Link>
+          <Link to="/awards" className="navbar__link">Awards</Link>
           <Link to="/search?genre=Action" className="navbar__link">Action</Link>
           <Link to="/search?genre=Comedy" className="navbar__link">Comedy</Link>
           <Link to="/search?genre=Drama" className="navbar__link">Drama</Link>
           <Link to="/search?genre=Horror" className="navbar__link">Horror</Link>
-          <Link to="/awards" className="navbar__link">Awards</Link>
         </div>
       </div>
 
@@ -91,7 +91,7 @@ export default function Navbar() {
 
         {/* User menu or auth links */}
         {user ? (
-          <div className="navbar__profile" onMouseLeave={() => setDropdownOpen(false)}>
+          <div className="navbar__profile">
             <button className="navbar__profile-btn" onClick={() => setDropdownOpen(!dropdownOpen)}>
               <div className="navbar__avatar">
                 {user.avatar ? (
@@ -104,14 +104,23 @@ export default function Navbar() {
             </button>
 
             {dropdownOpen && (
-              <div className="navbar__dropdown">
-                <Link to="/profile" className="navbar__dropdown-item" onClick={() => setDropdownOpen(false)}>
-                  <User size={16} /> Profile
-                </Link>
-                <button className="navbar__dropdown-item" onClick={handleLogout}>
-                  <LogOut size={16} /> Sign Out
-                </button>
-              </div>
+              <>
+                {/* Invisible bridge that spans the gap between the
+                    avatar button and the dropdown menu, preventing
+                    the menu from closing when the cursor crosses it */}
+                <div className="navbar__dropdown-bridge" onMouseLeave={() => setDropdownOpen(false)}>
+                  <div className="navbar__dropdown">
+                    <Link to="/profile" className="navbar__dropdown-item" onClick={() => setDropdownOpen(false)}>
+                      <User size={16} /> Profile
+                    </Link>
+                    <button className="navbar__dropdown-item" onClick={handleLogout}>
+                      <LogOut size={16} /> Sign Out
+                    </button>
+                  </div>
+                </div>
+                {/* Click-away backdrop to close when clicking outside */}
+                <div className="navbar__dropdown-backdrop" onClick={() => setDropdownOpen(false)} />
+              </>
             )}
           </div>
         ) : (

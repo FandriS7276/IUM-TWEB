@@ -134,16 +134,34 @@
   transform: rotate(180deg);
 }
 
-.navbar__dropdown {
+/*
+ * Bridge element: sits between the avatar button and the dropdown menu.
+ * It is invisible but keeps the hover zone contiguous so the cursor
+ * can travel from the button down into the menu without triggering
+ * a mouseLeave on the gap.
+ */
+.navbar__dropdown-bridge {
   position: absolute;
-  top: calc(100% + 8px);
+  top: 100%;
   right: 0;
+  padding-top: 8px;       /* matches the visual gap */
+  z-index: 1001;
+}
+
+.navbar__dropdown {
   min-width: 160px;
   background: rgba(20, 20, 20, .95);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   padding: var(--space-sm) 0;
   animation: fadeIn var(--transition-fast) both;
+}
+
+/* Full-screen invisible backdrop that closes the dropdown on outside click */
+.navbar__dropdown-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
 }
 
 .navbar__dropdown-item {
