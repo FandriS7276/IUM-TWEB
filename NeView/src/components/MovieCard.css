@@ -1,37 +1,34 @@
-/* ── MovieCard — Netflix-style thumbnail with hover expansion ──── */
+/*
+ * MovieCard CSS
+ * ==============
+ * Two-part layout:
+ *  1. .movie-card       — the static thumbnail that lives inside the carousel.
+ *                         Never changes size, so the carousel layout stays stable.
+ *  2. .movie-card-overlay — a position:fixed element that appears on hover,
+ *                         rendered outside the carousel's overflow:hidden.
+ */
 
+/* ── Static card (inside the carousel) ───────────────────────── */
 .movie-card {
-  position: relative;
   flex-shrink: 0;
-  width: 220px;
+  width: 200px;
   border-radius: var(--radius-sm);
-  overflow: visible;
-  cursor: pointer;
-  transition: transform var(--transition-normal), z-index 0s;
-  z-index: 1;
+  overflow: hidden;
+  transition: opacity var(--transition-fast);
 }
 
-/* Scale up on hover, raising above siblings */
-.movie-card--expanded {
-  transform: scale(1.45);
-  z-index: 10;
-  transition: transform var(--transition-normal), z-index 0s;
-}
-
-/* ── Poster area ─────────────────────────────────────────────── */
 .movie-card__poster {
   width: 100%;
   aspect-ratio: 2 / 3;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  overflow: hidden;
   background: var(--bg-card);
+  overflow: hidden;
+  border-radius: var(--radius-sm);
 }
 
 .movie-card__poster img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: opacity var(--transition-fast);
 }
 
 /* Gradient placeholder when no poster image exists */
@@ -58,20 +55,51 @@
   line-height: 1.2;
 }
 
-/* ── Expanded info panel ─────────────────────────────────────── */
-.movie-card__info {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
+/* ── Floating overlay (escapes carousel overflow) ────────────── */
+.movie-card-overlay {
+  pointer-events: auto;
+  border-radius: var(--radius-md);
   background: var(--bg-card);
-  padding: 10px 12px 12px;
-  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
   box-shadow: var(--shadow-hover);
-  animation: fadeIn 200ms ease both;
+  overflow: hidden;
+  animation: overlayAppear 200ms ease both;
 }
 
-/* ── Action buttons row ──────────────────────────────────────── */
+@keyframes overlayAppear {
+  from { opacity: 0; transform: scale(.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.movie-card-overlay__poster {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+}
+
+.movie-card-overlay__poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.movie-card-overlay__poster .movie-card__placeholder {
+  border-radius: 0;
+}
+
+/* ── Info panel (below poster in overlay) ─────────────────────── */
+.movie-card-overlay__info {
+  padding: 10px 12px 12px;
+}
+
+.movie-card-overlay__title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-white);
+  margin-bottom: 6px;
+  line-height: 1.2;
+}
+
+/* ── Shared sub-components (used in both overlay and detail) ──── */
 .movie-card__buttons {
   display: flex;
   align-items: center;
@@ -89,6 +117,7 @@
   justify-content: center;
   color: var(--text-primary);
   background: transparent;
+  cursor: pointer;
   transition: border-color var(--transition-fast), background var(--transition-fast);
 }
 
@@ -105,6 +134,19 @@
 
 .movie-card__circle-btn--play:hover {
   background: #ccc;
+}
+
+/* Liked state — green border + tint so the user gets clear feedback */
+.movie-card__circle-btn--liked {
+  border-color: var(--fresh);
+  color: var(--fresh);
+  background: rgba(108,192,74,.15);
+}
+
+.movie-card__circle-btn--liked:hover {
+  border-color: var(--rotten);
+  color: var(--rotten);
+  background: rgba(250,50,10,.15);
 }
 
 /* ── Meta badges ─────────────────────────────────────────────── */
@@ -139,23 +181,14 @@
   background: rgba(250,50,10,.1);
 }
 
-.mc-badge--rating {
-  color: var(--star);
-}
+.mc-badge--rating { color: var(--star); }
+.mc-badge--likes  { color: var(--text-secondary); }
 
-.mc-badge--likes {
-  color: var(--text-secondary);
-}
-
-/* ── Description ─────────────────────────────────────────────── */
+/* ── Description (full text, no truncation) ──────────────────── */
 .movie-card__desc {
-  font-size: 0.6rem;
+  font-size: 0.65rem;
   color: var(--text-secondary);
   line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
   margin-bottom: 6px;
 }
 
