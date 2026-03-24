@@ -5,23 +5,21 @@
  * Titles alone are not useful to the frontend, so this utility pairs each
  * title with its current review stats before sending the response.
  *
- * Batched concurrency:
- *   Titles are processed in chunks of BATCH_SIZE. Within each chunk, lookups
- *   run concurrently via Promise.all. This bounds the number of simultaneous
- *   MongoDB aggregations on a cold Redis start (e.g. fresh Docker run) while
- *   still being fast once the cache is warm — Redis hits resolve in <1ms.
+ * Performance (v2 — batch aggregation):
+ *   The original implementation called getMovieStats() per title in batches
+ *   of 15. On a cold Redis cache, each cache miss triggered a separate
+ *   MongoDB aggregation — 100 titles meant ~100 sequential queries.
  *
- *   A flat Promise.all over hundreds of titles caused OOM crashes in Docker:
- *   every title missed the cold cache and fired a simultaneous full-collection
- *   scan, exhausting the MongoDB connection pool and Node.js heap memory.
+ *   The new getBatchMovieStats() does it in 3 operations total:
+ *     1. One Redis pipeline to check all titles at once.
+ *     2. One MongoDB $in aggregation for all cache misses.
+ *     3. One Redis pipeline to store all new stats.
  *
- * Title normalisation:
- *   statsCache.getMovieStats() normalises titles internally (lowercase + trim)
- *   so "The Godfather" and "the godfather" resolve to the same cache entry.
- *   The original un-normalised title is preserved in the `title` field.
+ *   Cold-start enrichment of 100 titles: ~100 queries → 3 operations.
+ *   Warm-cache enrichment: 1 Redis pipeline → sub-millisecond.
  */
 
-import { getMovieStats, MovieStats } from '../services/statsCache';
+import { getBatchMovieStats, MovieStats } from '../services/statsCache';
 
 /** A movie title paired with its current aggregated review stats. */
 export interface EnrichedMovie {
@@ -29,31 +27,26 @@ export interface EnrichedMovie {
     stats: MovieStats;
 }
 
-/**
- * Max simultaneous getMovieStats() calls per batch.
- * Each cache miss triggers one MongoDB aggregation — keep this low enough
- * that a cold-start run of 300+ titles doesn't flood the connection pool.
- * Tune upward if you have a large MongoDB connection pool configured.
- */
-const BATCH_SIZE = 15;
+/** Zero-value stats for titles that have no reviews. */
+const ZERO_STATS: MovieStats = {
+    totalReviews: 0, freshCount: 0, rottenCount: 0,
+    tomatometer: 0, topCriticFreshCount: 0, latestReview: null
+};
 
 /**
  * Takes an array of movie titles and returns EnrichedMovie objects in the
  * same order, each pairing the title with its stats.
  *
- * Processes titles in batches of BATCH_SIZE to prevent OOM on cold starts.
- * Within each batch lookups are concurrent, so warm-cache calls are fast.
+ * Uses getBatchMovieStats() for a single-pass lookup instead of per-title
+ * sequential calls. See statsCache.ts for the batch implementation details.
  */
 export async function enrichWithStats(titles: string[]): Promise<EnrichedMovie[]> {
     if (!titles.length) return [];
 
-    const results: EnrichedMovie[] = [];
+    const statsMap = await getBatchMovieStats(titles);
 
-    for (let i = 0; i < titles.length; i += BATCH_SIZE) {
-        const batch     = titles.slice(i, i + BATCH_SIZE);
-        const batchStats = await Promise.all(batch.map(getMovieStats));
-        batch.forEach((title, j) => results.push({ title, stats: batchStats[j] }));
-    }
-
-    return results;
+    return titles.map(title => ({
+        title,
+        stats: statsMap.get(title) ?? { ...ZERO_STATS }
+    }));
 }

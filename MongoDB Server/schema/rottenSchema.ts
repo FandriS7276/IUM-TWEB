@@ -121,4 +121,20 @@ rotten.index({ review_type: 1, review_date: -1 });
  */
 rotten.index({ top_critic: 1, review_date: -1 });
 
+/**
+ * movie_title + review_date — compound index for the MovieDetailPage pattern
+ * where reviews are filtered by title and sorted by date.
+ *
+ * Collation matches the single-field movie_title index above so MongoDB can
+ * use this index for case-insensitive title lookups *and* date-sorted results
+ * in a single index scan — no in-memory sort needed.
+ *
+ * Covers:  GET /reviews?movie_title=X&sortBy=review_date-desc
+ *          (the most common query on the movie detail page)
+ */
+rotten.index(
+    { movie_title: 1, review_date: -1 },
+    { collation: { locale: 'en', strength: 2 } }
+);
+
 export default model<IRottenReviewDocument>('rottenCollection', rotten);

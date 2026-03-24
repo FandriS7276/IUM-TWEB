@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PipelineStage } from 'mongoose';
 import OscarModel from '../schema/oscarSchema';
+import ReviewModel from '../schema/rottenSchema';
 import { extractPagination, buildPaginatedResponse, emptyPaginatedResponse } from '../utils/pagination';
 import { handleError } from '../utils/handler';
 import { validateCategory } from '../utils/validation';
@@ -200,50 +201,81 @@ export const getControversialOscarWinners = async (req: Request, res: Response):
         if (cached) {
             allData = JSON.parse(cached) as ControversialWinner[];
         } else {
-            // Run the full aggregation without $limit so the complete sorted
-            // result is cached in Redis. Pagination is applied in-memory below.
-            const controversial = await OscarModel.aggregate([
+            // Two-step approach to avoid a per-document $regexMatch $lookup
+            // (which forces a full collection scan of rottenCollection for
+            // every Oscar winner and is O(winners × reviews)):
+            //
+            // Step 1 — fetch all Oscar winners in one aggregation, deduped by
+            //          film title (lowercase for the join key).
+            // Step 2 — single $match on rottenCollection using $in on the
+            //          lowercased title field — this CAN use an index.
+            // Step 3 — join in memory, keep up to 5 rotten reviews per film,
+            //          discard films with zero rotten reviews, sort by count.
+
+            // Step 1: distinct winners (one row per film)
+            const winners = await OscarModel.aggregate([
                 { $match: { winner: true } },
                 {
-                    $lookup: {
-                        from: 'rottenCollection',
-                        // Keep the original casing — $regexMatch with 'i' handles
-                        // case-insensitivity without the $toLower overhead on both sides.
-                        let: { filmTitle: '$film' },
-                        pipeline: [
-                            // $regexMatch is cleaner than $toLower + $eq and avoids
-                            // computing a lowercase string for every doc in the join.
-                            // Note: $expr in a $lookup pipeline still can't use the
-                            // collation index — a future refactor to a single-query
-                            // approach (fetch all winners → $in lookup) would eliminate
-                            // this limitation entirely.
-                            { $match: { $expr: { $regexMatch: { input: '$movie_title', regex: '$$filmTitle', options: 'i' } } } },
-                            { $match: { review_type: 'Rotten' } },
-                            { $limit: 5 }
-                        ],
-                        as: 'rotten_reviews'
-                    }
-                },
-                { $match: { 'rotten_reviews.0': { $exists: true } } },
-                { $addFields: { rotten_count: { $size: '$rotten_reviews' } } },
-                { $sort: { rotten_count: -1 } },
-                {
-                    $project: {
-                        year: '$year_film',
-                        category: 1,
-                        film: 1,
-                        winner: 1,
-                        rotten_count: 1,
-                        rotten_reviews: {
-                            $map: {
-                                input: '$rotten_reviews',
-                                as: 'r',
-                                in: { title: '$$r.movie_title', score: '$$r.review_score', content: '$$r.review_content' }
-                            }
-                        }
+                    $group: {
+                        _id: { $toLower: '$film' },
+                        film:     { $first: '$film' },
+                        category: { $first: '$category' },
+                        year_film: { $first: '$year_film' },
+                        winner:   { $first: '$winner' }
                     }
                 }
             ]);
+
+            if (winners.length === 0) {
+                res.json(emptyPaginatedResponse(limit));
+                return;
+            }
+
+            // Original-cased titles for the $in query — the collation index on
+            // movie_title (locale 'en', strength 2) makes this case-insensitive
+            // without needing a separate lowercase field.
+            const titleKeys = winners.map((w: { film: string }) => w.film);
+
+            // Step 2: single query across rottenCollection using $in + collation.
+            // The collation matches the index definition so MongoDB uses the index
+            // rather than falling back to a collection scan.
+            const rottenDocs = await ReviewModel.find(
+                { movie_title: { $in: titleKeys }, review_type: 'Rotten' },
+                { movie_title: 1, review_score: 1, review_content: 1 }
+            )
+                .collation({ locale: 'en', strength: 2 })
+                .lean();
+
+            // Step 3: group rotten reviews by lowercase title for O(1) lookup
+            const rottenByTitle = new Map<string, Array<{ title: string; score: string; content: string }>>();
+            for (const doc of rottenDocs) {
+                const key = (doc.movie_title as string).toLowerCase();
+                if (!rottenByTitle.has(key)) rottenByTitle.set(key, []);
+                const arr = rottenByTitle.get(key)!;
+                if (arr.length < 5) {
+                    arr.push({
+                        title:   doc.movie_title   as string,
+                        score:   (doc.review_score  ?? '') as string,
+                        content: (doc.review_content ?? '') as string
+                    });
+                }
+            }
+
+            // Build result — only films that have at least one rotten review
+            const controversial: ControversialWinner[] = [];
+            for (const w of winners) {
+                const reviews = rottenByTitle.get(w.film.toLowerCase()) ?? [];
+                if (reviews.length === 0) continue;
+                controversial.push({
+                    year:           w.year_film,
+                    category:       w.category,
+                    film:           w.film,
+                    winner:         w.winner,
+                    rotten_count:   reviews.length,
+                    rotten_reviews: reviews
+                });
+            }
+            controversial.sort((a, b) => b.rotten_count - a.rotten_count);
 
             allData = controversial;
 

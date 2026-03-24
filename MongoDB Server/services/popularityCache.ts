@@ -11,7 +11,7 @@
  *
  *   2. REFRESH (cron) — runs nightly/weekly to collapse counters into ranked
  *      Redis sorted sets (ZSETs). Score formula: views*1 + likes*3 + freshCount*0.5
- *      Likes are weighted 3× more than views because they signal stronger intent.
+ *      Likes are weighted 3x more than views because they signal stronger intent.
  *      Previous rankings are preserved as `popular:daily:previous` / `popular:weekly:previous`
  *      so "yesterday" and "last week" endpoints remain available after each reset.
  *
@@ -23,7 +23,7 @@
  */
 
 import client from '../database/redisClient';
-import { getMovieStats } from './statsCache';
+import { getBatchMovieStats } from './statsCache';
 import { enrichWithStats, EnrichedMovie } from '../utils/enrichment';
 
 // ─── Redis key constants ──────────────────────────────────────────────────────
@@ -78,6 +78,8 @@ export async function trackView(title: string): Promise<void> {
  * Same structure as trackView but with a higher hot-list bonus (300 vs 100)
  * to reflect that a like is a stronger signal of interest than a passive view.
  */
+
+// TODO - like tracking requires logged user in MongoDB: movie table in PostgreSQL uses like column
 export async function trackLike(title: string): Promise<void> {
     if (!title) return;
     await client.multi()
@@ -113,12 +115,16 @@ export async function refreshDailyPopularity(): Promise<void> {
         // map to string | null, treating any pipeline Error as a missing value
         const raw = (await pipe.exec()).map(r => (r instanceof Error ? null : r) as string | null);
 
+        // Batch-fetch all stats in one MongoDB aggregation instead of
+        // calling getMovieStats() per title in a loop (N queries → 1 query).
+        const batchStats = await getBatchMovieStats(titles);
+
         const scoreMap: Record<string, number> = {};
         let idx = 0;
         for (const title of titles) {
             const views = Number(raw[idx++] || 0);
             const likes = Number(raw[idx++] || 0);
-            const fresh = (await getMovieStats(title)).freshCount || 0;
+            const fresh = batchStats.get(title)?.freshCount || 0;
             // Weighted score: likes matter 3× more than views; critical acclaim adds a boost
             scoreMap[title] = views * 1 + likes * 3 + fresh * 0.5;
         }
@@ -133,6 +139,12 @@ export async function refreshDailyPopularity(): Promise<void> {
         // Copy current rankings to PREVIOUS before resetting, so "yesterday" stays available
         await client.del(DAILY_PREVIOUS);
         await client.zUnionStore(DAILY_PREVIOUS, [{ key: DAILY_ZSET, weight: 1 }]);
+
+        // Flush stale enriched caches so the next request gets fresh data
+        const enrichedKeys = await client.keys(`${ENRICHED_PREFIX}daily:*`);
+        if (enrichedKeys.length) await client.del(enrichedKeys);
+        const yesterdayKeys = await client.keys(`${ENRICHED_PREFIX}yesterday:*`);
+        if (yesterdayKeys.length) await client.del(yesterdayKeys);
 
         // Clean up: delete counters and the active set so tomorrow starts fresh
         const cleanup = client.multi();
@@ -166,12 +178,14 @@ export async function refreshWeeklyPopularity(): Promise<void> {
         });
         const raw = (await pipe.exec()).map(r => (r instanceof Error ? null : r) as string | null);
 
+        const batchStats = await getBatchMovieStats(titles);
+
         const scoreMap: Record<string, number> = {};
         let idx = 0;
         for (const title of titles) {
             const views = Number(raw[idx++] || 0);
             const likes = Number(raw[idx++] || 0);
-            const fresh = (await getMovieStats(title)).freshCount || 0;
+            const fresh = batchStats.get(title)?.freshCount || 0;
             scoreMap[title] = views * 1 + likes * 3 + fresh * 0.5;
         }
 
@@ -183,6 +197,12 @@ export async function refreshWeeklyPopularity(): Promise<void> {
 
         await client.del(WEEKLY_PREVIOUS);
         await client.zUnionStore(WEEKLY_PREVIOUS, [{ key: WEEKLY_ZSET, weight: 1 }]);
+
+        // Flush stale enriched caches
+        const enrichedKeys = await client.keys(`${ENRICHED_PREFIX}weekly:*`);
+        if (enrichedKeys.length) await client.del(enrichedKeys);
+        const lastweekKeys = await client.keys(`${ENRICHED_PREFIX}lastweek:*`);
+        if (lastweekKeys.length) await client.del(lastweekKeys);
 
         const cleanup = client.multi();
         cleanup.del(ACTIVE_WEEKLY);
@@ -204,31 +224,73 @@ export async function refreshWeeklyPopularity(): Promise<void> {
  * `zRevRange` returns members of a ZSET ordered from highest to lowest score.
  * `start`/`end` are 0-based index offsets, so page 2 with limit 20
  * becomes start=20, end=39 — exactly one page's worth of results.
+ *
+ * Enriched results are cached in Redis for 5 minutes. This means the homepage
+ * (which calls 5 popularity endpoints in parallel) only pays the enrichment
+ * cost once per 5 minutes, regardless of how many users load the page.
+ * The cache key includes the ZSET name + page + limit so different pages
+ * and endpoints don't collide.
  */
+
+const ENRICHED_PREFIX = 'enriched:';
+const ENRICHED_TTL    = 300;  // 5 minutes
+
+/**
+ * Helper: wraps an enrichment call with a Redis cache layer.
+ * On cache hit, returns the cached JSON directly (sub-millisecond).
+ * On cache miss, calls the enrichment function, caches the result, and returns.
+ */
+async function cachedEnrich(
+    cacheKey: string,
+    zsetKey: string,
+    start: number,
+    end: number
+): Promise<EnrichedMovie[]> {
+    // Check cache first
+    const cached = await client.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+
+    // Cache miss — fetch titles and enrich
+    const titles = (await client.zRevRange(zsetKey, start, end)) as string[];
+    const enriched = await enrichWithStats(titles);
+
+    // Store for 5 minutes — non-blocking (fire and forget)
+    client.setEx(cacheKey, ENRICHED_TTL, JSON.stringify(enriched)).catch(() => {});
+
+    return enriched;
+}
+
 export async function getPopularDaily(page = 1, limit = 20): Promise<EnrichedMovie[]> {
     const start = (page - 1) * limit;
-    const titles = (await client.zRevRange(DAILY_ZSET, start, start + limit - 1)) as string[];
-    return enrichWithStats(titles);
+    const key = `${ENRICHED_PREFIX}daily:${page}:${limit}`;
+    return cachedEnrich(key, DAILY_ZSET, start, start + limit - 1);
 }
 
 export async function getPopularWeekly(page = 1, limit = 20): Promise<EnrichedMovie[]> {
     const start = (page - 1) * limit;
-    const titles = (await client.zRevRange(WEEKLY_ZSET, start, start + limit - 1)) as string[];
-    return enrichWithStats(titles);
+    const key = `${ENRICHED_PREFIX}weekly:${page}:${limit}`;
+    return cachedEnrich(key, WEEKLY_ZSET, start, start + limit - 1);
 }
 
 export async function getYesterdayPopular(limit = 10): Promise<EnrichedMovie[]> {
-    const titles = (await client.zRevRange(DAILY_PREVIOUS, 0, limit - 1)) as string[];
-    return enrichWithStats(titles);
+    const key = `${ENRICHED_PREFIX}yesterday:${limit}`;
+    return cachedEnrich(key, DAILY_PREVIOUS, 0, limit - 1);
 }
 
 export async function getLastWeekPopular(limit = 10): Promise<EnrichedMovie[]> {
-    const titles = (await client.zRevRange(WEEKLY_PREVIOUS, 0, limit - 1)) as string[];
-    return enrichWithStats(titles);
+    const key = `${ENRICHED_PREFIX}lastweek:${limit}`;
+    return cachedEnrich(key, WEEKLY_PREVIOUS, 0, limit - 1);
 }
 
 /** Returns the hottest movies within the last 4-hour rolling window. */
 export async function getHotMovies(limit = 10): Promise<EnrichedMovie[]> {
+    // Hot list uses a shorter cache (60s) since it changes more frequently
+    const key = `${ENRICHED_PREFIX}hot:${limit}`;
+    const cached = await client.get(key);
+    if (cached) return JSON.parse(cached);
+
     const titles = (await client.zRevRange(HOT_ZSET, 0, limit - 1)) as string[];
-    return enrichWithStats(titles);
+    const enriched = await enrichWithStats(titles);
+    client.setEx(key, 60, JSON.stringify(enriched)).catch(() => {});
+    return enriched;
 }

@@ -31,6 +31,10 @@ import RottenReview from '../schema/rottenSchema';
 
 const STATS_PREFIX = 'movie:stats:';
 
+/** TTL for stats cache entries (seconds). 24 hours ensures fresh data after
+ *  daily review imports while avoiding repeated aggregations within a day. */
+const STATS_TTL = 24 * 60 * 60;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface MovieStats {
@@ -158,6 +162,8 @@ export async function refreshMovieStats(movieTitle: string): Promise<MovieStats>
 
     // Store under the normalised key so future lookups hit regardless of
     // how the caller capitalises the title.
+    // Set a 24-hour TTL so stats are refreshed daily after review imports,
+    // rather than persisting forever and going stale.
     const key = `${STATS_PREFIX}${normalised}`;
     await client.hSet(key, {
         totalReviews:        stats.totalReviews,
@@ -167,6 +173,7 @@ export async function refreshMovieStats(movieTitle: string): Promise<MovieStats>
         topCriticFreshCount: stats.topCriticFreshCount,
         latestReview:        stats.latestReview ?? ''
     });
+    await client.expire(key, STATS_TTL);
 
     return stats;
 }
@@ -176,8 +183,7 @@ export async function refreshMovieStats(movieTitle: string): Promise<MovieStats>
  *
  * Fast path (cache hit):  one Redis HGETALL — sub-millisecond.
  * Slow path (cache miss): MongoDB aggregation + Redis HSET, then cached
- *                         permanently until the server is restarted or the
- *                         key is manually evicted.
+ *                         for 24 hours.
  *
  * Always returns a valid MovieStats object — never throws and never returns
  * undefined. If the title has no reviews in rottenCollection, all numeric
@@ -199,4 +205,142 @@ export async function getMovieStats(movieTitle: string): Promise<MovieStats> {
     }
 
     return refreshMovieStats(movieTitle);
+}
+
+// ─── Batch stats (for popularity enrichment) ─────────────────────────────────
+
+const ZERO_STATS: MovieStats = {
+    totalReviews: 0, freshCount: 0, rottenCount: 0,
+    tomatometer: 0, topCriticFreshCount: 0, latestReview: null
+};
+
+/**
+ * Returns stats for MULTIPLE movie titles in one shot.
+ *
+ * This replaces the old pattern of calling getMovieStats() in a loop,
+ * which on a cold cache would fire N separate MongoDB aggregations —
+ * one per title. With 100 titles, that's 100 sequential queries.
+ *
+ * This function:
+ *   1. Checks Redis for all titles in a single pipeline (one round-trip).
+ *   2. Collects titles that missed the cache.
+ *   3. Runs ONE MongoDB aggregation with $match: { movie_title: { $in: [...] } }
+ *      grouped by movie_title — resolves all cache misses in a single query.
+ *   4. Stores all newly-computed stats back to Redis in a single pipeline.
+ *
+ * The result: cold-start enrichment of 100 titles goes from ~100 queries
+ * to 1 Redis pipeline + 1 MongoDB aggregation + 1 Redis pipeline = 3 ops.
+ */
+export async function getBatchMovieStats(titles: string[]): Promise<Map<string, MovieStats>> {
+    if (!titles.length) return new Map();
+
+    const result = new Map<string, MovieStats>();
+    const normalised = titles.map(t => ({ original: t, norm: normalise(t) }));
+
+    // Step 1: Check Redis for all titles in one pipeline
+    const redisPipe = client.multi();
+    for (const { norm } of normalised) {
+        redisPipe.hGetAll(`${STATS_PREFIX}${norm}`);
+    }
+    const redisResults = await redisPipe.exec();
+
+    // Step 2: Separate cache hits from misses
+    const missingTitles: { original: string; norm: string }[] = [];
+
+    for (let i = 0; i < normalised.length; i++) {
+        const cached = redisResults[i] as unknown as Record<string, string> | null;
+        if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
+            result.set(normalised[i].original, {
+                totalReviews:        Number(cached.totalReviews),
+                freshCount:          Number(cached.freshCount),
+                rottenCount:         Number(cached.rottenCount),
+                tomatometer:         Number(cached.tomatometer),
+                topCriticFreshCount: Number(cached.topCriticFreshCount),
+                latestReview:        cached.latestReview || null
+            });
+        } else {
+            missingTitles.push(normalised[i]);
+        }
+    }
+
+    // All titles were cached — nothing to aggregate
+    if (missingTitles.length === 0) return result;
+
+    // Step 3: Single MongoDB aggregation for ALL missing titles
+    // Uses $in with the collation index for case-insensitive matching,
+    // then $group by movie_title to get per-title stats in one pass.
+    const missingNorms = missingTitles.map(t => t.norm);
+
+    interface BatchAggResult {
+        _id: string;
+        totalReviews: number;
+        freshCount: number;
+        rottenCount: number;
+        topCriticFresh: number;
+        latestReview: Date | null;
+    }
+
+    const pipeline = [
+        { $match: { movie_title: { $in: missingNorms } } },
+        {
+            $group: {
+                _id: '$movie_title',
+                totalReviews:  { $sum: 1 },
+                freshCount:    { $sum: { $cond: [{ $eq: ['$review_type', 'Fresh'] },  1, 0] } },
+                rottenCount:   { $sum: { $cond: [{ $eq: ['$review_type', 'Rotten'] }, 1, 0] } },
+                topCriticFresh: {
+                    $sum: {
+                        $cond: [
+                            { $and: [{ $eq: ['$review_type', 'Fresh'] }, { $eq: ['$top_critic', true] }] },
+                            1, 0
+                        ]
+                    }
+                },
+                latestReview: { $max: '$review_date' }
+            }
+        }
+    ];
+
+    const aggResults = await RottenReview.aggregate<BatchAggResult>(pipeline)
+        .collation({ locale: 'en', strength: 2 });
+
+    // Build a lookup map from the aggregation results
+    const aggMap = new Map<string, BatchAggResult>();
+    for (const row of aggResults) {
+        aggMap.set(row._id.toLowerCase(), row);
+    }
+
+    // Step 4: Store all new stats in Redis in one pipeline
+    const storePipe = client.multi();
+
+    for (const { original, norm } of missingTitles) {
+        const raw = aggMap.get(norm);
+        const stats: MovieStats = raw ? {
+            totalReviews:        raw.totalReviews,
+            freshCount:          raw.freshCount,
+            rottenCount:         raw.rottenCount,
+            tomatometer:         raw.totalReviews > 0
+                ? (raw.freshCount / raw.totalReviews) * 100 : 0,
+            topCriticFreshCount: raw.topCriticFresh,
+            latestReview:        raw.latestReview
+                ? (raw.latestReview as unknown as Date).toISOString() : null
+        } : { ...ZERO_STATS };
+
+        result.set(original, stats);
+
+        const key = `${STATS_PREFIX}${norm}`;
+        storePipe.hSet(key, {
+            totalReviews:        stats.totalReviews,
+            freshCount:          stats.freshCount,
+            rottenCount:         stats.rottenCount,
+            tomatometer:         stats.tomatometer,
+            topCriticFreshCount: stats.topCriticFreshCount,
+            latestReview:        stats.latestReview ?? ''
+        });
+        storePipe.expire(key, STATS_TTL);
+    }
+
+    await storePipe.exec();
+
+    return result;
 }
