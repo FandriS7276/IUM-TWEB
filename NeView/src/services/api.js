@@ -216,4 +216,13 @@ export const moviesAPI = {
    * @returns { id, name, year, rating, poster, description, genres, runtime }
    */
   getExpandedData: (id) => pgApi.get(`/movies/expanded/${id}`),
+
+  /**
+   * POST /movies/{id}/like
+   * Atomically increments the persistent like counter in PostgreSQL.
+   * Returns { likes: <new count> }.
+   *
+   * @param {number} id - Movie ID
+   */
+  likeMovie: (id) => pgApi.post(`/movies/${id}/like`),
 };

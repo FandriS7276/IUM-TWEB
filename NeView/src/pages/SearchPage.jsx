@@ -19,6 +19,8 @@ import MovieCard from '../components/MovieCard';
 import { reviewsAPI, moviesAPI } from '../services/api';
 import './SearchPage.css';
 
+
+// TODO - selection based filters are white on white background. Fix and improve style
 export default function SearchPage() {
   const [params] = useSearchParams();
   const query = params.get('q') || '';

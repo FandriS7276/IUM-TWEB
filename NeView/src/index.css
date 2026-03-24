@@ -127,6 +127,17 @@ input, textarea, select {
   outline: none;
 }
 
+/* Force dark colour-scheme for native form controls (select dropdowns, date pickers, etc.) */
+select, input {
+  color-scheme: dark;
+}
+
+/* Style <option> elements inside selects for dark theme consistency */
+option {
+  background: #1e1e1e;
+  color: #e5e5e5;
+}
+
 /* ── Scrollbar (Webkit) ────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 8px;

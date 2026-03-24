@@ -314,7 +314,7 @@
 .md-review--fresh  { border-left-color: var(--fresh);  }
 .md-review--rotten { border-left-color: var(--rotten); }
 
-/* ── Review Filter / Sort Toolbar ───────────────────────────── */
+/* ── Review Filter / Sort Toolbar — Netflix-inspired rounded ── */
 .md-reviews-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -322,9 +322,10 @@
   gap: var(--space-md);
   margin-bottom: var(--space-lg);
   padding: var(--space-md) var(--space-lg);
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-subtle);
+  background: linear-gradient(135deg, rgba(30, 0, 0, 0.6), rgba(20, 20, 20, 0.95));
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(229, 9, 20, 0.15);
+  backdrop-filter: blur(4px);
 }
 
 .md-reviews-toolbar__filters {
@@ -338,62 +339,69 @@
 .md-filter {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   flex: 1 1 130px;
   min-width: 120px;
 }
 
 .md-filter__label {
   font-size: 0.68rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
+  padding-left: 4px;
 }
 
 .md-filter__select,
 .md-filter__input {
-  padding: 7px 10px;
-  border-radius: var(--radius-sm);
+  padding: 9px 14px;
+  border-radius: 20px;
   font-size: 0.82rem;
-  color: var(--text-white);
+  color: var(--text-primary);
   background: var(--bg-tertiary);
   border: 1px solid var(--border-subtle);
-  transition: border-color var(--transition-fast);
+  transition: all var(--transition-fast);
   appearance: auto;
+}
+
+.md-filter__select:hover,
+.md-filter__input:hover {
+  border-color: rgba(229, 9, 20, 0.35);
+  background: var(--bg-hover);
 }
 
 .md-filter__select:focus,
 .md-filter__input:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: rgba(229, 9, 20, 0.6);
+  box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.1);
 }
 
 .md-filter__input::placeholder {
   color: var(--text-muted);
 }
 
-/* ── Active filter state — warm cinematic red tones ─────────── *
- * Applied when a filter has a non-default value selected.       *
- * Palette: deep burgundy background, muted rose text,           *
- * soft crimson border — warm and inviting, not cold/techno.     */
+/* ── Active filter state — warm cinematic red glow ──────────── */
 .md-filter__select--active,
 .md-filter__input--active {
-  background: rgba(180, 28, 28, 0.18);
-  border-color: rgba(200, 60, 60, 0.50);
+  background: rgba(180, 28, 28, 0.22);
+  border-color: rgba(229, 9, 20, 0.45);
   color: #f2cece;
+  box-shadow: 0 0 8px rgba(229, 9, 20, 0.08);
 }
 
 .md-filter__select--active:focus,
 .md-filter__input--active:focus {
   border-color: rgba(229, 9, 20, 0.75);
-  background: rgba(180, 28, 28, 0.26);
+  background: rgba(180, 28, 28, 0.30);
   color: #fadadd;
+  box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.15);
 }
 
 .md-reviews-toolbar__reset {
-  padding: 7px 16px;
-  border-radius: 16px;
+  padding: 8px 20px;
+  border-radius: 20px;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-secondary);
@@ -401,13 +409,14 @@
   border: 1px solid var(--border-subtle);
   cursor: pointer;
   white-space: nowrap;
-  transition: color var(--transition-fast), border-color var(--transition-fast);
+  transition: all var(--transition-fast);
   align-self: flex-end;
 }
 
 .md-reviews-toolbar__reset:hover {
   color: var(--accent);
   border-color: var(--accent);
+  background: rgba(229, 9, 20, 0.08);
 }
 
 /* ── Reviews List ────────────────────────────────────────────── */

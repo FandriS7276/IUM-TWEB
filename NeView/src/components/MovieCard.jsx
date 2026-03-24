@@ -48,6 +48,7 @@ export default function MovieCard({ movie }) {
   const [hovered, setHovered] = useState(false);
   const [overlayStyle, setOverlayStyle] = useState(null);
   const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(movie.likes ?? 0);
 
   // ── Tier 2: hover data (lazily loaded) ───────────────────────
   const [hoverData, setHoverData] = useState(null);
@@ -114,6 +115,8 @@ export default function MovieCard({ movie }) {
       const { data } = await moviesAPI.getHoverData(movie.id);
       hoverCache.current = data;
       setHoverData(data);
+      // Sync like count from the server (most up-to-date source)
+      if (data.likes != null && !liked) setLikeCount(data.likes);
     } catch (err) {
       console.warn('Failed to fetch hover data:', err);
     } finally {
@@ -224,10 +227,23 @@ export default function MovieCard({ movie }) {
     [navigate, movieId],
   );
 
-  const handleLike = useCallback((e) => {
+  const handleLike = useCallback(async (e) => {
     e.stopPropagation();
-    setLiked((prev) => !prev);
-  }, []);
+    if (liked || !movie.id) return; // Only allow liking once per session
+
+    // Optimistic update — show the like immediately, revert on failure
+    setLiked(true);
+    setLikeCount((prev) => prev + 1);
+
+    try {
+      const { data } = await moviesAPI.likeMovie(movie.id);
+      setLikeCount(data.likes); // Sync with server's authoritative count
+    } catch (err) {
+      console.warn('Failed to persist like:', err);
+      setLiked(false);
+      setLikeCount((prev) => prev - 1); // Revert optimistic update
+    }
+  }, [liked, movie.id]);
 
   /** Toggle the expanded section and fetch data if needed */
   const handleExpand = useCallback(
@@ -324,9 +340,9 @@ export default function MovieCard({ movie }) {
               <Star size={12} fill="var(--star)" stroke="var(--star)" /> {Number(overlayRating).toFixed(1)}
             </span>
           )}
-          {movie.likes != null && movie.likes > 0 && (
+          {likeCount > 0 && (
             <span className="mc-badge mc-badge--likes">
-              <ThumbsUp size={11} /> {(movie.likes + (liked ? 1 : 0)).toLocaleString()}
+              <ThumbsUp size={11} /> {likeCount.toLocaleString()}
             </span>
           )}
           {movie.review_type && (

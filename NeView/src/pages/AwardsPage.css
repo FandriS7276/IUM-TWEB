@@ -48,13 +48,14 @@
   border-color: var(--star);
 }
 
-/* Filters */
+/* ── Filters — Netflix-inspired rounded dark controls ────────── */
 .awards-filters {
   margin-bottom: var(--space-xl);
   padding: var(--space-lg);
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-subtle);
+  background: linear-gradient(135deg, rgba(30, 0, 0, 0.6), rgba(20, 20, 20, 0.95));
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(229, 9, 20, 0.15);
+  backdrop-filter: blur(4px);
 }
 
 .awards-filters__row {
@@ -66,62 +67,70 @@
 .awards-filter {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   flex: 1 1 160px;
   min-width: 140px;
 }
 
 .awards-filter__label {
-  font-size: 0.7rem;
-  font-weight: 600;
+  font-size: 0.68rem;
+  font-weight: 700;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
+  padding-left: 4px;
 }
 
 .awards-filter__select,
 .awards-filter__input {
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
-  font-size: 0.85rem;
-  color: var(--text-white);
-  background: var(--bg-main);
+  padding: 10px 14px;
+  border-radius: 20px;
+  font-size: 0.84rem;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
   border: 1px solid var(--border-subtle);
-  transition: border-color var(--transition-fast);
+  transition: all var(--transition-fast);
   appearance: auto;
+}
+
+.awards-filter__select:hover,
+.awards-filter__input:hover {
+  border-color: rgba(229, 9, 20, 0.35);
+  background: var(--bg-hover);
 }
 
 .awards-filter__select:focus,
 .awards-filter__input:focus {
   outline: none;
-  border-color: var(--star);
+  border-color: rgba(229, 9, 20, 0.6);
+  box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.1);
 }
 
 .awards-filter__input::placeholder {
   color: var(--text-muted);
 }
 
-/* ── Active filter state — warm cinematic red tones ─────────── *
- * Mirrors the MovieDetailPage filter palette for site-wide      *
- * consistency: burgundy fill, muted rose text, soft red border. */
+/* ── Active filter state — warm cinematic red glow ──────────── */
 .awards-filter__select--active,
 .awards-filter__input--active {
-  background: rgba(180, 28, 28, 0.18);
-  border-color: rgba(200, 60, 60, 0.50);
+  background: rgba(180, 28, 28, 0.22);
+  border-color: rgba(229, 9, 20, 0.45);
   color: #f2cece;
+  box-shadow: 0 0 8px rgba(229, 9, 20, 0.08);
 }
 
 .awards-filter__select--active:focus,
 .awards-filter__input--active:focus {
   border-color: rgba(229, 9, 20, 0.75);
-  background: rgba(180, 28, 28, 0.26);
+  background: rgba(180, 28, 28, 0.30);
   color: #fadadd;
+  box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.15);
 }
 
 .awards-filters__reset {
   margin-top: var(--space-md);
-  padding: 6px 16px;
-  border-radius: 16px;
+  padding: 8px 20px;
+  border-radius: 20px;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-secondary);
@@ -132,8 +141,9 @@
 }
 
 .awards-filters__reset:hover {
-  color: var(--star);
-  border-color: var(--star);
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(229, 9, 20, 0.08);
 }
 
 /* Grid */

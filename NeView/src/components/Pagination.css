@@ -117,19 +117,25 @@
 }
 
 .pagination__per-page-select {
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-card);
+  padding: 6px 12px;
+  border-radius: 16px;
+  background: var(--bg-tertiary);
   border: 1px solid var(--border-subtle);
-  color: var(--text-white);
+  color: var(--text-primary);
   font-size: 0.8rem;
   cursor: pointer;
-  transition: border-color var(--transition-fast);
+  transition: all var(--transition-fast);
+}
+
+.pagination__per-page-select:hover {
+  border-color: rgba(229, 9, 20, 0.35);
+  background: var(--bg-hover);
 }
 
 .pagination__per-page-select:focus {
   outline: none;
-  border-color: var(--accent);
+  border-color: rgba(229, 9, 20, 0.6);
+  box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.1);
 }
 
 /* ── Responsive: hide individual page buttons on very small screens ── */
