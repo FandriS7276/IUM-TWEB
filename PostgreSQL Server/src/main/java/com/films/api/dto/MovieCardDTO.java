@@ -15,5 +15,6 @@ public record MovieCardDTO(
         String       poster,
         String       description,
         List<String> genres,
-        Integer      runtime
+        Integer      runtime,
+        Integer      likes
 ) {}

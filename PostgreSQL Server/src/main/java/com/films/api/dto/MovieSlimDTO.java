@@ -13,5 +13,6 @@ package com.films.api.dto;
 public record MovieSlimDTO(
         Integer id,
         String  name,
-        String  poster
+        String  poster,
+        Integer likes
 ) {}

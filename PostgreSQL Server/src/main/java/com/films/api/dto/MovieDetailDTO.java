@@ -24,6 +24,7 @@ public record MovieDetailDTO(
         Integer runtime,
         Double  rating,
         String  poster,
+        Integer likes,
 
         // ── Simple string lists ────────────────────────────────────────────
         List<String> genres,

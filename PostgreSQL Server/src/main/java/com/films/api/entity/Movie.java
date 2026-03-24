@@ -41,4 +41,9 @@ public class Movie {
 
     @Column(name = "rating", columnDefinition = "NUMERIC")
     private Double rating;
+
+    /** Persistent like counter — stored in PostgreSQL instead of Redis
+     *  so likes survive cache flushes and reduce Redis workload. */
+    @Column(name = "likes", nullable = false, columnDefinition = "INTEGER DEFAULT 0")
+    private Integer likes = 0;
 }

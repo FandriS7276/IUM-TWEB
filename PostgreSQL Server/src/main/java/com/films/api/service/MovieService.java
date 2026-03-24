@@ -194,6 +194,7 @@ public class MovieService {
                         movie.getMinute(),
                         movie.getRating(),
                         poster,
+                        movie.getLikes(),
 
                         genres   .stream().map(Genre::getGenre)    .toList(),
                         themes   .stream().map(Theme::getTheme)    .toList(),
@@ -303,7 +304,8 @@ public class MovieService {
                                         posterMap.get(m.getId()),
                                         m.getDescription(),
                                         genreMap.getOrDefault(m.getId(), List.of()),
-                                        m.getMinute()
+                                        m.getMinute(),
+                                        m.getLikes()
                                 ),
                                 (a, b) -> a  // keep first on duplicate
                         ));
@@ -353,7 +355,8 @@ public class MovieService {
                                 m -> new MovieSlimDTO(
                                         m.getId(),
                                         m.getName(),
-                                        posterMap.get(m.getId())
+                                        posterMap.get(m.getId()),
+                                        m.getLikes()
                                 ),
                                 (a, b) -> a
                         ));
@@ -396,7 +399,8 @@ public class MovieService {
                         desc,
                         movie.getRating(),
                         movie.getDate(),
-                        movie.getMinute()
+                        movie.getMinute(),
+                        movie.getLikes()
                 );
         }
 
@@ -432,8 +436,34 @@ public class MovieService {
                         poster,
                         movie.getDescription(),
                         genres,
-                        movie.getMinute()
+                        movie.getMinute(),
+                        movie.getLikes()
                 );
+        }
+
+        /**
+         * Atomically increments the like counter for a movie in PostgreSQL.
+         *
+         * Uses a single UPDATE query (likes = likes + 1) instead of
+         * read-modify-write to prevent lost updates under concurrent requests.
+         * Also tracks the like in Redis popularity counters so the trending
+         * algorithms still reflect like activity.
+         *
+         * @param movieId the movie ID to like
+         * @return the updated like count
+         * @throws MovieNotFoundException if the movie doesn't exist
+         */
+        @Transactional  // writable transaction — overrides the class-level readOnly=true
+        public int likeMovie(Integer movieId) {
+                if (movieId == null) throw new MovieNotFoundException("id=null", List.of());
+                int updated = movieRepository.incrementLikes(movieId);
+                if (updated == 0) {
+                        throw new MovieNotFoundException("id=" + movieId, List.of());
+                }
+                // Fetch the new count to return to the caller
+                return movieRepository.findById(movieId)
+                        .map(Movie::getLikes)
+                        .orElse(0);
         }
 
         // =========================================================================

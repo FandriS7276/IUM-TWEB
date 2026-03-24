@@ -31,7 +31,8 @@ CREATE TABLE movies (
   tagline     TEXT,
   description TEXT,
   minute      INTEGER,
-  rating      NUMERIC(4,2)
+  rating      NUMERIC(4,2),
+  likes       INTEGER      DEFAULT 0   -- Persistent like counter (survives Redis flushes)
 );
 
 CREATE INDEX idx_movies_name_lower ON movies (LOWER(name));

@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import org.springframework.data.jpa.repository.Modifying;
+
 import java.util.List;
 import java.util.Optional;
 
@@ -76,4 +78,17 @@ public interface MovieRepository extends JpaRepository<Movie, Integer> {
      */
     @Query("SELECT m FROM Movie m WHERE LOWER(m.name) IN :names")
     List<Movie> findByNamesIgnoreCase(@Param("names") List<String> names);
+
+    /**
+     * Atomically increments the likes counter for a movie.
+     *
+     * Uses a native UPDATE ... SET likes = likes + 1 instead of
+     * read-modify-write (findById → setLikes → save) to avoid lost-update
+     * race conditions under concurrent likes.
+     *
+     * @return number of rows updated (1 if movie exists, 0 if not)
+     */
+    @Modifying
+    @Query("UPDATE Movie m SET m.likes = m.likes + 1 WHERE m.id = :id")
+    int incrementLikes(@Param("id") Integer id);
 }

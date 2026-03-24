@@ -18,5 +18,6 @@ public record MovieHoverDTO(
         String       description,
         Double       rating,
         Integer      year,
-        Integer      runtime
+        Integer      runtime,
+        Integer      likes
 ) {}

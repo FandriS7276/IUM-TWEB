@@ -243,6 +243,33 @@ public class MovieController {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // POST /api/movies/{id}/like
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Increments the persistent like counter for a movie.
+     *
+     * Likes are stored directly in PostgreSQL (movies.likes column) instead
+     * of ephemeral Redis counters. This means:
+     *   - Likes survive Redis flushes and restarts.
+     *   - One fewer Redis key per movie to maintain.
+     *   - Atomic SQL UPDATE prevents lost-update race conditions.
+     *
+     * Redis still handles the popularity tracking (counters + hot list)
+     * via the MongoDB backend's trackLike() function — this endpoint
+     * only persists the permanent counter.
+     *
+     * Response: { "likes": 42 }
+     */
+    @PostMapping("/{id}/like")
+    public ResponseEntity<Map<String, Object>> likeMovie(
+            @PathVariable Integer id
+    ) {
+        int newCount = movieService.likeMovie(id);
+        return ResponseEntity.ok(Map.of("likes", newCount));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // GET /health  (lightweight liveness probe)
     // ─────────────────────────────────────────────────────────────────────────
     // Note: registered at app level in a separate mapping below because
