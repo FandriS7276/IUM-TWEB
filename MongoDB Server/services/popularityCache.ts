@@ -291,3 +291,5 @@ export async function getHotMovies(limit = 10): Promise<EnrichedMovie[]> {
     const titles = (await client.zRange(HOT_ZSET, 0, limit - 1, { REV: true })) as string[];
     const enriched = await enrichWithStats(titles);
     client.setEx(key, 60, JSON.stringify(enriched)).catch(() => {});
+    return enriched;
+}
