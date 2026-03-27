@@ -1,16 +1,28 @@
 /**
  * HomePage
  * ---------
- * The main landing page — Netflix-style layout with a hero banner
- * at the top followed by horizontally scrollable movie rows.
+ * Netflix-style landing page with:
+ *  - HeroBanner: full-viewport carousel of trending movies (auto-rotating)
+ *  - Popularity rows: Trending Now, Popular Today, This Week, Yesterday's Hits
+ *  - Recently Reviewed Movies: movies that recently got reviews (MovieCards)
+ *  - Recently Reviewed (individual reviews): latest reviews as ReviewCards
+ *  - Genre carousels: one row per main genre, Netflix style
  *
- * Fetches real data from the backend's popular and reviews endpoints.
- * Each row corresponds to a different popularity timeframe.
+ * Data loading strategy:
+ *  1. Fire all popularity + review + genre requests in parallel.
+ *  2. Collect unique movie titles from popularity + genre rows.
+ *  3. Batch-fetch poster+id (slim) from PostgreSQL for those titles.
+ *  4. Merge, render. ReviewCard rows skip the PG enrichment step entirely.
+ *
+ * Promise.allSettled ensures a single failing endpoint never kills the page.
  */
 import { useState, useEffect } from 'react';
 import HeroBanner from '../components/HeroBanner';
 import MovieRow from '../components/MovieRow';
 import { popularAPI, reviewsAPI, moviesAPI } from '../services/api';
+
+/** Main genres to render as carousels. Order = display order. */
+const GENRES = ['Action', 'Drama', 'Comedy', 'Thriller', 'Romance', 'Horror', 'Animation', 'Crime'];
 
 export default function HomePage() {
   const [rows, setRows] = useState([]);
@@ -18,58 +30,51 @@ export default function HomePage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    /**
-     * Fetches movie data from multiple backend endpoints in parallel,
-     * then enriches it with poster/description/genre data from PostgreSQL.
-     *
-     * Flow:
-     *   1. Fire all popularity + review requests in parallel.
-     *   2. Collect all unique movie titles across every row.
-     *   3. Batch-fetch card data from PostgreSQL (poster, description, genres, rating).
-     *   4. Merge the PostgreSQL data into each movie item.
-     *   5. Set the enriched rows for rendering.
-     *
-     * Uses Promise.allSettled so a single failing endpoint doesn't
-     * break the entire page — fulfilled results are shown, rejected
-     * ones are silently skipped.
-     */
     const fetchHomeData = async () => {
       try {
-        const [trendingRes, todayRes, weekRes, yesterdayRes, reviewsRes] =
-          await Promise.allSettled([
-            popularAPI.trending({ limit: 20 }),
-            popularAPI.today({ limit: 20 }),
-            popularAPI.thisWeek({ limit: 20 }),
-            popularAPI.yesterday({ limit: 20 }),
-            reviewsAPI.getAll({ limit: 20, sortBy: 'review_date-desc' }),
-          ]);
+        // ── Fire all requests in parallel ─────────────────────────────────
+        const [
+          trendingRes,
+          todayRes,
+          weekRes,
+          yesterdayRes,
+          recentMoviesRes,   // unique movie titles recently reviewed → MovieCards
+          recentReviewsRes,  // individual reviews → ReviewCards
+          ...genreResults    // one result per GENRES entry
+        ] = await Promise.allSettled([
+          popularAPI.trending({ limit: 20 }),
+          popularAPI.today({ limit: 20 }),
+          popularAPI.thisWeek({ limit: 20 }),
+          popularAPI.yesterday({ limit: 20 }),
+          // Recently reviewed movies (unique titles only, cheap)
+          reviewsAPI.getRecentMovies({ limit: 20 }),
+          // Individual recent reviews (with content, for ReviewCards)
+          reviewsAPI.getRecent({ limit: 20 }),
+          // Genre rows — all fire in parallel
+          ...GENRES.map((g) => moviesAPI.getByGenre(g, 20)),
+        ]);
 
-        const homeRows = [];
-
-        // Helper: extract data array from a settled promise result
+        // ── Helper: safely extract data array ─────────────────────────────
         const extract = (result) => {
           if (result.status === 'fulfilled') {
             const payload = result.value.data;
-            return payload.data || payload.results || [];
+            return payload.data || payload.results || payload.movies || [];
           }
           return [];
         };
 
-        /**
-         * Normalises a popular-endpoint item (EnrichedMovie from MongoDB)
-         * into a flat object that MovieCard can consume.
-         *
-         * Input shape:  { title: "Fight Club", stats: { tomatometer, freshCount, ... } }
-         * Output shape: { name: "Fight Club", tomatometer: 86, ... }
-         */
+        // ── Normalise a popularity item into a flat MovieCard shape ────────
         const normalisePopular = (item) => ({
           name: item.title || item.name || item.movie_title || 'Untitled',
           tomatometer: item.stats?.tomatometer ?? null,
-          freshCount: item.stats?.freshCount ?? 0,
+          freshCount:  item.stats?.freshCount ?? 0,
           rottenCount: item.stats?.rottenCount ?? 0,
           totalReviews: item.stats?.totalReviews ?? 0,
         });
 
+        const homeRows = [];
+
+        // ── Popularity rows ───────────────────────────────────────────────
         const trending = extract(trendingRes).map(normalisePopular);
         if (trending.length > 0) {
           homeRows.push({ title: 'Trending Now', movies: trending });
@@ -87,70 +92,84 @@ export default function HomePage() {
 
         const yesterday = extract(yesterdayRes).map(normalisePopular);
         if (yesterday.length > 0) {
-          homeRows.push({ title: 'Yesterday\'s Hits', movies: yesterday });
+          homeRows.push({ title: "Yesterday's Hits", movies: yesterday });
         }
 
-        // Recent reviews — extract unique movie titles as a "Recently Reviewed" row
-        const reviews = extract(reviewsRes);
-        if (reviews.length > 0) {
-          const seen = new Set();
-          const recentMovies = reviews
-            .filter((r) => {
-              if (seen.has(r.movie_title)) return false;
-              seen.add(r.movie_title);
-              return true;
-            })
-            .map((r) => ({
-              id: r._id,
-              name: r.movie_title,
-              description: r.review_content,
-              review_type: r.review_type,
-              critic_name: r.critic_name,
-              publisher_name: r.publisher_name,
-            }));
-
-          homeRows.push({ title: 'Recently Reviewed', movies: recentMovies });
+        // ── Recently Reviewed Movies carousel (MovieCards) ────────────────
+        // getRecentMovies returns unique movie titles sorted by most recent review.
+        // We map to { name } shapes so the slim batch enrichment picks them up.
+        const recentMovieItems = extract(recentMoviesRes);
+        if (recentMovieItems.length > 0) {
+          homeRows.push({
+            title: 'Recently Reviewed',
+            movies: recentMovieItems.map((item) => ({ name: item.movie_title })),
+          });
         }
 
-        // ── Enrich with PostgreSQL slim data (poster + id ONLY) ──────
-        // Tier 1: Only fetch what the static card needs — poster and id.
-        // Genres, descriptions, and ratings are loaded lazily on hover
-        // (Tier 2) by the MovieCard component itself.
-        const allTitles = new Set();
-        homeRows.forEach((row) =>
+        // ── Genre carousels (MovieCards, sorted by rating) ────────────────
+        // getByGenre returns slim data { id, name, poster, likes } already
+        // enriched by PostgreSQL, so no second batch step needed.
+        GENRES.forEach((genre, i) => {
+          const genreMovies = extract(genreResults[i]);
+          if (genreMovies.length > 0) {
+            homeRows.push({
+              title: genre,
+              // Already has id + poster from getByGenre — skip PG enrichment
+              movies: genreMovies.map((m) => ({
+                id:     m.id,
+                name:   m.name,
+                poster: m.poster,
+                likes:  m.likes ?? 0,
+              })),
+              alreadyEnriched: true, // flag to skip the slim batch step
+            });
+          }
+        });
+
+        // ── Recently Reviewed individual reviews (ReviewCards) ────────────
+        const recentReviews = extract(recentReviewsRes);
+        if (recentReviews.length > 0) {
+          homeRows.push({
+            title: 'Latest Reviews',
+            movies: recentReviews,
+            variant: 'review', // renders ReviewCard instead of MovieCard
+          });
+        }
+
+        // ── Batch-enrich with PostgreSQL slim data (poster + id) ──────────
+        // Only needed for rows that aren't already enriched (popularity rows
+        // and Recently Reviewed Movies). Genre rows and review rows skip this.
+        const titlesToEnrich = new Set();
+        homeRows.forEach((row) => {
+          if (row.variant === 'review') return;
+          if (row.alreadyEnriched) return;
           row.movies.forEach((m) => {
             const t = m.name || m.movie_title;
-            if (t) allTitles.add(t);
-          })
-        );
+            if (t) titlesToEnrich.add(t);
+          });
+        });
 
-        if (allTitles.size > 0) {
+        if (titlesToEnrich.size > 0) {
           try {
-            const { data } = await moviesAPI.getSlimBatch([...allTitles]);
+            const { data } = await moviesAPI.getSlimBatch([...titlesToEnrich]);
             const pgMovies = data.movies || [];
 
-            // Build a lookup by lowercase title for case-insensitive merging
             const pgMap = {};
             pgMovies.forEach((m) => {
               if (m.name) pgMap[m.name.toLowerCase()] = m;
             });
 
-            // Merge only id + poster — everything else loads on hover
             homeRows.forEach((row) => {
+              if (row.variant === 'review') return;
+              if (row.alreadyEnriched) return;
               row.movies = row.movies.map((movie) => {
                 const key = (movie.name || movie.movie_title || '').toLowerCase();
                 const pg = pgMap[key];
                 if (!pg) return movie;
-                return {
-                  ...movie,
-                  id: pg.id,
-                  poster: pg.poster,
-                };
+                return { ...movie, id: pg.id, poster: pg.poster };
               });
             });
           } catch (pgErr) {
-            // PostgreSQL enrichment is non-critical — cards still render
-            // with title + tomatometer even if the slim batch call fails.
             console.warn('PostgreSQL slim batch enrichment failed:', pgErr);
           }
         }
@@ -174,7 +193,7 @@ export default function HomePage() {
       <div className="home-page__rows">
         {loading && (
           <p style={{ textAlign: 'center', color: '#999', padding: '2rem' }}>
-            Loading movies...
+            Loading movies…
           </p>
         )}
 
@@ -185,7 +204,12 @@ export default function HomePage() {
         )}
 
         {rows.map((row) => (
-          <MovieRow key={row.title} title={row.title} movies={row.movies} />
+          <MovieRow
+            key={row.title}
+            title={row.title}
+            movies={row.movies}
+            variant={row.variant}
+          />
         ))}
 
         {!loading && !error && rows.length === 0 && (
