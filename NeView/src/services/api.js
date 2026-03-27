@@ -161,6 +161,15 @@ export const popularAPI = {
 
   /** GET /popular/last-week — Last week's popular movies */
   lastWeek: (params) => api.get('/popular/last-week', { params }),
+
+  /**
+   * POST /movies/view
+   * Records a movie page view for popularity tracking.
+   * Fire-and-forget — callers should never await or surface errors from this.
+   *
+   * @param {string} title - Exact movie title (as stored in the DB)
+   */
+  recordView: (title) => api.post('/movies/view', { title }),
 };
 
 export default api;
