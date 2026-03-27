@@ -114,7 +114,7 @@ export const createReview = async (req: Request, res: Response): Promise<void> =
         const total       = Number(current.totalReviews || 1);
         const fresh       = Number(current.freshCount   || 0);
         const tomatometer = total > 0 ? (fresh / total) * 100 : 0;
-        await client.hSet(key, 'tomatometer', tomatometer.toFixed(1));
+        await client.hSet(key, 'tomatometer', Math.round(tomatometer));
 
         res.status(201).json({ success: true, message: 'Review created', data: newReview });
     } catch (err) {
