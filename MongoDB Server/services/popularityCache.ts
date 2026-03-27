@@ -79,7 +79,6 @@ export async function trackView(title: string): Promise<void> {
  * to reflect that a like is a stronger signal of interest than a passive view.
  */
 
-// TODO - like tracking requires logged user in MongoDB: movie table in PostgreSQL uses like column
 export async function trackLike(title: string): Promise<void> {
     if (!title) return;
     await client.multi()

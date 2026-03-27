@@ -120,10 +120,15 @@ export async function refreshMovieStats(movieTitle: string): Promise<MovieStats>
                 // Tomatometer = (freshCount / totalReviews) * 100, guarded against
                 // division by zero when a title has no reviews at all.
                 tomatometer: {
-                    $cond: [
-                        { $eq: ['$totalReviews', 0] },
-                        0,
-                        { $multiply: [{ $divide: ['$freshCount', '$totalReviews'] }, 100] }
+                    $round: [
+                        {
+                            $cond: [
+                                { $eq: ['$totalReviews', 0] },
+                                0,
+                                { $multiply: [{ $divide: ['$freshCount', '$totalReviews'] }, 100] }
+                            ]
+                        },
+                        0
                     ]
                 },
                 topCriticFreshCount: '$topCriticFresh',
@@ -153,7 +158,7 @@ export async function refreshMovieStats(movieTitle: string): Promise<MovieStats>
         totalReviews:       raw.totalReviews,
         freshCount:         raw.freshCount,
         rottenCount:        raw.rottenCount,
-        tomatometer:        raw.tomatometer,
+        tomatometer:        Math.round(raw.tomatometer),
         topCriticFreshCount: raw.topCriticFreshCount,
         latestReview:       raw.latestReview
             ? (raw.latestReview as unknown as Date).toISOString()
@@ -320,7 +325,7 @@ export async function getBatchMovieStats(titles: string[]): Promise<Map<string, 
             freshCount:          raw.freshCount,
             rottenCount:         raw.rottenCount,
             tomatometer:         raw.totalReviews > 0
-                ? (raw.freshCount / raw.totalReviews) * 100 : 0,
+                ? Math.round((raw.freshCount / raw.totalReviews) * 100) : 0,
             topCriticFreshCount: raw.topCriticFresh,
             latestReview:        raw.latestReview
                 ? (raw.latestReview as unknown as Date).toISOString() : null
