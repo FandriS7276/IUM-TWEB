@@ -42,7 +42,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useSocketChat } from '../hooks/useSocketChat';
 import { usePerPage } from '../hooks/usePerPage';
-import { reviewsAPI, moviesAPI } from '../services/api';
+import { reviewsAPI, moviesAPI, popularAPI } from '../services/api';
 import Pagination from '../components/Pagination';
 import './MovieDetailPage.css';
 
@@ -140,6 +140,18 @@ export default function MovieDetailPage() {
   const toggleReviewExpand = useCallback((id) => {
     setExpandedReviews((prev) => ({ ...prev, [id]: !prev[id] }));
   }, []);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Effect 0 — Record a page view for popularity tracking (fires once per title)
+  //
+  // Fire-and-forget: errors are swallowed so a Redis hiccup never affects the
+  // user experience. The 202 response from the server means the write was
+  // accepted asynchronously, so we don't need to wait for confirmation.
+  // ─────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!decodedTitle) return;
+    popularAPI.recordView(decodedTitle).catch(() => {});
+  }, [decodedTitle]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Effect 1 — Fetch overall tomatometer stats (fires once per movie title)
