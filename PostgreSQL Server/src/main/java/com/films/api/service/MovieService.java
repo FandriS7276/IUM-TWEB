@@ -165,9 +165,10 @@ public class MovieService {
          */
         public MovieDetailDTO getMovieByTitle(String title) {
 
-                // Step 1 — exact match (case-insensitive)
-                Movie movie = movieRepository.findByNameIgnoreCase(title.trim())
-                        .orElseThrow(() -> buildNotFoundException(title));
+                // Step 1 — exact match (case-insensitive); take first if duplicates exist
+                List<Movie> matches = movieRepository.findByNameIgnoreCase(title.trim());
+                if (matches.isEmpty()) throw buildNotFoundException(title);
+                Movie movie = matches.get(0);
 
                 Integer movieId = movie.getId();
                 log.info("Resolved title \"{}\" to id={}", title, movieId);
@@ -181,7 +182,7 @@ public class MovieService {
                 List<Release>     releases  = releaseRepository.findByMovieIdOrderByDate(movieId);
                 List<Actor>       actors    = actorRepository.findByMovieIdOrderByName(movieId);
                 List<CrewMember>  crew      = crewRepository.findByMovieIdOrderByRoleAscNameAsc(movieId);
-                String            poster    = posterRepository.findFirstByMovieId(movieId)
+                String            poster    = posterRepository.findFirstByMovieIdOrderByRowId(movieId)
                                                 .map(Poster::getLink)
                                                 .orElse(null);
 
@@ -427,7 +428,7 @@ public class MovieService {
                         .map(Genre::getGenre)
                         .toList();
 
-                String poster = posterRepository.findFirstByMovieId(movieId)
+                String poster = posterRepository.findFirstByMovieIdOrderByRowId(movieId)
                         .map(Poster::getLink)
                         .orElse(null);
 
@@ -539,7 +540,4 @@ public class MovieService {
                                 r[3] != null ? ((Number) r[3]).doubleValue() : null, // rating
                                 null                                                 // poster omitted
                         ))
-                        .toList();
-                return new MovieNotFoundException(title, suggestions);
-        }
-}
+      

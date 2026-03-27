@@ -8,12 +8,11 @@ import java.util.Optional;
 
 public interface PosterRepository extends JpaRepository<Poster, Long> {
 
-    /** Returns one poster per movie (dataset has at most one per film) */
-    Optional<Poster> findFirstByMovieId(Integer movieId);
+    /** Returns the first poster for a movie, ordered by row_id for determinism */
+    Optional<Poster> findFirstByMovieIdOrderByRowId(Integer movieId);
 
     /**
      * Batch fetch posters for a list of IDs — used by the getAllMovies
      * endpoint to avoid N+1 queries on the summary list.
      */
-    List<Poster> findByMovieIdIn(List<Integer> movieIds);
-}
+    List<Poster> findByMovieIdIn(List<In
