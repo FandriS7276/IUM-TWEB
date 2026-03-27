@@ -250,7 +250,7 @@ async function cachedEnrich(
     if (cached) return JSON.parse(cached);
 
     // Cache miss — fetch titles and enrich
-    const titles = (await client.zRevRange(zsetKey, start, end)) as string[];
+    const titles = (await client.zRange(zsetKey, start, end, { REV: true })) as string[];
     const enriched = await enrichWithStats(titles);
 
     // Store for 5 minutes — non-blocking (fire and forget)
@@ -288,8 +288,6 @@ export async function getHotMovies(limit = 10): Promise<EnrichedMovie[]> {
     const cached = await client.get(key);
     if (cached) return JSON.parse(cached);
 
-    const titles = (await client.zRevRange(HOT_ZSET, 0, limit - 1)) as string[];
+    const titles = (await client.zRange(HOT_ZSET, 0, limit - 1, { REV: true })) as string[];
     const enriched = await enrichWithStats(titles);
     client.setEx(key, 60, JSON.stringify(enriched)).catch(() => {});
-    return enriched;
-}
