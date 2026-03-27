@@ -540,4 +540,7 @@ public class MovieService {
                                 r[3] != null ? ((Number) r[3]).doubleValue() : null, // rating
                                 null                                                 // poster omitted
                         ))
-      
+                        .toList();
+                return new MovieNotFoundException(title, suggestions);
+        }
+}

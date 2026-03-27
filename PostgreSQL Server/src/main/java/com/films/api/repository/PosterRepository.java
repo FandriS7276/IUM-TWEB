@@ -15,4 +15,5 @@ public interface PosterRepository extends JpaRepository<Poster, Long> {
      * Batch fetch posters for a list of IDs — used by the getAllMovies
      * endpoint to avoid N+1 queries on the summary list.
      */
-    List<Poster> findByMovieIdIn(List<In
+    List<Poster> findByMovieIdIn(List<Integer> movieIds);
+}
