@@ -37,3 +37,10 @@
   font-size: 1rem;
   padding: var(--space-2xl) 0;
 }
+
+/* ── Review card grid (Browse All mode) ───────────────────────── */
+.search-page__review-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-md);
+}
