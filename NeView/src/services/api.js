@@ -82,6 +82,32 @@ export const reviewsAPI = {
    */
   getAll: (params, config = {}) => api.get('/reviews', { params, ...config }),
 
+  /**
+   * GET /reviews/recent-movies?limit=N
+   * Returns unique movie titles ordered by their most recent review date.
+   * Cheaper than getAll() — no review_content, no $facet count, 5-min Redis cache.
+   * Used by the homepage "Recently Reviewed" row.
+   */
+  getRecentMovies: (params) => api.get('/reviews/recent-movies', { params }),
+
+  /**
+   * GET /reviews/recent?limit=N
+   * Returns the N most recent reviews with card-ready data:
+   * _id, movie_title, critic_name, review_type, review_content (truncated 200 chars).
+   * Used by the homepage "Recently Reviewed" row to render ReviewCards.
+   */
+  getRecent: (params) => api.get('/reviews/recent', { params }),
+
+  /**
+   * GET /reviews/stats?movie_title=X
+   * Returns pre-computed tomatometer stats (freshCount, rottenCount, tomatometer,
+   * totalReviews) for a movie title. Backed by a 24-hour Redis cache.
+   * Used by MovieDetailPage instead of two parallel limit=1 review queries.
+   *
+   * @param {string} movieTitle - The movie title to get stats for.
+   */
+  getStats: (movieTitle) => api.get('/reviews/stats', { params: { movie_title: movieTitle } }),
+
   /** POST /reviews — Create a new review (requires auth) */
   create: (data) => api.post('/reviews', data),
 
@@ -225,4 +251,17 @@ export const moviesAPI = {
    * @param {number} id - Movie ID
    */
   likeMovie: (id) => pgApi.post(`/movies/${id}/like`),
+
+  /**
+   * GET /movies/genre/{genre}?limit=N
+   * Returns slim card data (id, name, poster) for movies of a given genre,
+   * sorted by rating descending. Used by the homepage genre carousels.
+   * Cached by the browser for 1 hour (Cache-Control header from server).
+   *
+   * @param {string} genre - Genre name (e.g. "Action", "Drama")
+   * @param {number} limit - Max results (default 20)
+   * @returns { genre, count, movies: [{ id, name, poster }] }
+   */
+  getByGenre: (genre, limit = 20) =>
+    pgApi.get(`/movies/genre/${encodeURIComponent(genre)}`, { params: { limit } }),
 };
