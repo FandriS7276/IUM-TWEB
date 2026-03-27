@@ -310,9 +310,19 @@
   background: var(--accent-hover);
 }
 
-/* ── Review type accent on left border ──────────────────────── */
+/* ── Review type accent ──────────────────────────────────────── */
 .md-review--fresh  { border-left-color: var(--fresh);  }
 .md-review--rotten { border-left-color: var(--rotten); }
+
+/* Highlight animation — applied briefly when navigating to a specific review via hash */
+.md-review--highlighted {
+  animation: reviewHighlight 2s ease;
+}
+
+@keyframes reviewHighlight {
+  0%   { box-shadow: 0 0 0 2px var(--accent), var(--shadow-card); background: rgba(229, 9, 20, 0.08); }
+  100% { box-shadow: none; background: var(--bg-card); }
+}
 
 /* ── Review Filter / Sort Toolbar — Netflix-inspired rounded ── */
 .md-reviews-toolbar {
@@ -426,31 +436,118 @@
   gap: var(--space-md);
 }
 
+/* Card shell — flex row: poster thumb on the left, body on the right */
 .md-review {
+  display: flex;
+  gap: 0;
   background: var(--bg-card);
-  padding: var(--space-md) var(--space-lg);
   border-radius: var(--radius-md);
   border-left: 3px solid var(--border-subtle);
+  overflow: hidden;
+  transition: background var(--transition-fast);
 }
 
-.md-review__header {
+.md-review:hover {
+  background: var(--bg-hover);
+}
+
+/* ── Poster thumbnail ─────────────────────────────────────────── */
+.md-review__poster {
+  flex-shrink: 0;
+  width: 72px;
+  /* 2:3 aspect ratio maintained by the img / fallback inside */
+  background: var(--bg-tertiary);
+  overflow: hidden;
+}
+
+.md-review__poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  -webkit-user-drag: none;
+  user-drag: none;
+}
+
+.md-review__poster-fallback {
+  width: 100%;
+  height: 100%;
+  min-height: 108px; /* roughly 72px × 1.5 = 108px (2:3) */
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-sm);
+  justify-content: center;
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: var(--text-white);
+  background: linear-gradient(160deg, #1a1a2e 0%, #0f3460 60%, #e94560 100%);
 }
 
-.md-review__type {
-  font-size: 1.3rem;
+/* ── Body ─────────────────────────────────────────────────────── */
+.md-review__body {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-md) var(--space-lg) var(--space-md) var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Movie title + fresh/rotten badge on one line */
+.md-review__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.md-review__movie-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-white);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Pill badge — mirrors the mc-badge style already used in MovieCard */
+.md-review__type-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.md-review__type-badge--fresh {
+  color: var(--fresh);
+  background: rgba(108, 192, 74, 0.15);
+  border: 1px solid rgba(108, 192, 74, 0.35);
+}
+
+.md-review__type-badge--rotten {
+  color: var(--rotten);
+  background: rgba(250, 50, 10, 0.15);
+  border: 1px solid rgba(250, 50, 10, 0.35);
+}
+
+/* Reviewer + publisher + date */
+.md-review__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.75rem;
 }
 
 .md-review__critic {
-  font-size: 0.85rem;
   font-weight: 600;
-  color: var(--text-white);
-  display: flex;
+  color: var(--text-primary);
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
 }
 
 .md-review__tc-badge {
@@ -458,24 +555,42 @@
 }
 
 .md-review__pub {
-  font-size: 0.7rem;
   color: var(--text-muted);
 }
 
 .md-review__score {
   margin-left: auto;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--text-primary);
-  background: rgba(255,255,255,.08);
+  background: rgba(255, 255, 255, 0.08);
   padding: 2px 8px;
   border-radius: 4px;
 }
 
+/* Review body text */
 .md-review__content {
-  font-size: 0.9rem;
-  color: var(--text-primary);
-  line-height: 1.6;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  line-height: 1.65;
+}
+
+/* "Read more / Show less" toggle */
+.md-review__toggle {
+  align-self: flex-start;
+  margin-top: 2px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: color var(--transition-fast);
+}
+
+.md-review__toggle:hover {
+  color: var(--accent-hover);
 }
 
 /* ── Live Chat ───────────────────────────────────────────────── */

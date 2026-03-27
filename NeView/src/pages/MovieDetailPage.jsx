@@ -30,8 +30,8 @@
  * 4. The per-page preference is stored in localStorage via `usePerPage` so it
  *    survives page reloads and is shared with every other paginated view.
  */
-import { useState, useEffect, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useParams, Link, useLocation } from 'react-router-dom';
 import {
   ThumbsUp,
   ThumbsDown,
@@ -67,6 +67,10 @@ export default function MovieDetailPage() {
   const { id }   = useParams();
   const { user } = useAuth();
   const { perPage, setPerPage } = usePerPage();
+  const location = useLocation();
+
+  // Track whether we've already scrolled to a review anchor after loading
+  const hasScrolledToAnchor = useRef(false);
 
   // The decoded movie title derived from the URL param (stable across renders)
   const decodedTitle = decodeURIComponent(id);
@@ -129,12 +133,21 @@ export default function MovieDetailPage() {
   const [reviewSubmitted, setReviewSubmitted] = useState(false);
   const [submitError,     setSubmitError]     = useState('');
 
+  // ── Per-review expand/collapse for long content ──────────────────────────
+  // Map of review _id → boolean (true = expanded, undefined/false = collapsed)
+  const [expandedReviews, setExpandedReviews] = useState({});
+
+  const toggleReviewExpand = useCallback((id) => {
+    setExpandedReviews((prev) => ({ ...prev, [id]: !prev[id] }));
+  }, []);
+
   // ─────────────────────────────────────────────────────────────────────────
   // Effect 1 — Fetch overall tomatometer stats (fires once per movie title)
   //
-  // Two parallel limit=1 requests let us read pagination.totalDocs for each
-  // review_type independently. This is far more efficient than fetching all
-  // reviews just to count them — the backend does the COUNT in one DB call.
+  // Uses GET /reviews/stats which delegates to statsCache.getMovieStats().
+  // That cache has a 24-hour TTL vs the 2-minute review cache, so warm hits
+  // are much more common. On a cold cache it runs ONE MongoDB aggregation
+  // instead of the previous two parallel limit=1 $facet queries.
   // ─────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!decodedTitle) return;
@@ -146,19 +159,17 @@ export default function MovieDetailPage() {
 
     (async () => {
       try {
-        const [freshRes, rottenRes] = await Promise.all([
-          reviewsAPI.getAll({ movie_title: decodedTitle, review_type: 'Fresh',  limit: 1, page: 1 }),
-          reviewsAPI.getAll({ movie_title: decodedTitle, review_type: 'Rotten', limit: 1, page: 1 }),
-        ]);
+        const { data } = await reviewsAPI.getStats(decodedTitle);
 
         if (cancelled) return;
 
-        const freshCount  = freshRes.data?.pagination?.totalDocs  ?? 0;
-        const rottenCount = rottenRes.data?.pagination?.totalDocs ?? 0;
-        const total       = freshCount + rottenCount;
-        const tomatometer = total > 0 ? Math.round((freshCount / total) * 100) : null;
-
-        setStats({ tomatometer, freshCount, rottenCount, totalReviews: total });
+        const s = data.stats ?? {};
+        setStats({
+          tomatometer:  s.tomatometer  ?? null,
+          freshCount:   s.freshCount   ?? 0,
+          rottenCount:  s.rottenCount  ?? 0,
+          totalReviews: s.totalReviews ?? 0,
+        });
       } catch {
         // Stats are non-critical — the hero still renders without them
       } finally {
@@ -321,6 +332,30 @@ export default function MovieDetailPage() {
     [movieTitle, reviewForm]
   );
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Effect — Scroll to a specific review when the URL contains a hash like
+  // #review-<_id>. Runs once after reviews finish loading.
+  // ─────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (loading || hasScrolledToAnchor.current) return;
+    const hash = location.hash;
+    if (!hash || !hash.startsWith('#review-')) return;
+
+    // Small delay to ensure the DOM has rendered the review elements
+    const timer = setTimeout(() => {
+      const el = document.getElementById(hash.slice(1));
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Add a brief highlight effect
+        el.classList.add('md-review--highlighted');
+        setTimeout(() => el.classList.remove('md-review--highlighted'), 2000);
+      }
+      hasScrolledToAnchor.current = true;
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [loading, location.hash]);
+
   // Whether any non-default filter or sort is active (used to show "Clear" button)
   const hasActiveFilters =
     filters.review_type ||
@@ -396,7 +431,7 @@ export default function MovieDetailPage() {
                     className="md-stat__value"
                     style={{ color: stats.tomatometer >= 60 ? 'var(--fresh)' : 'var(--rotten)' }}
                   >
-                    {stats.tomatometer >= 60 ? '🍅' : '🤢'} {stats.tomatometer}%
+                    {stats.tomatometer >= 60 ? '🍅' : '🤢'} {Math.round(stats.tomatometer)}%
                   </span>
                   <span className="md-stat__label">Tomatometer</span>
                 </div>
@@ -582,36 +617,77 @@ export default function MovieDetailPage() {
         {/* ── Reviews list ──────────────────────────────────────────────── */}
         {!loading && !error && (
           <div className="md-reviews-list">
-            {reviews.map((r) => (
-              <div
-                key={r._id}
-                className={`md-review ${
-                  r.review_type === 'Fresh' ? 'md-review--fresh' : 'md-review--rotten'
-                }`}
-              >
-                <div className="md-review__header">
-                  <span className="md-review__type">
-                    {r.review_type === 'Fresh' ? '🍅' : '🤢'}
-                  </span>
-                  <div>
-                    <p className="md-review__critic">
-                      {r.critic_name || 'Anonymous'}
-                      {r.top_critic && <Award size={12} className="md-review__tc-badge" />}
-                    </p>
-                    <p className="md-review__pub">
-                      {r.publisher_name || ''}
-                      {r.review_date && (
-                        <> &middot; {new Date(r.review_date).toLocaleDateString()}</>
-                      )}
-                    </p>
+            {reviews.map((r) => {
+              const isFresh     = r.review_type === 'Fresh';
+              const content     = r.review_content || '';
+              const PREVIEW_LEN = 220;
+              const isLong      = content.length > PREVIEW_LEN;
+              const isExpanded  = !!expandedReviews[r._id];
+
+              return (
+                <div
+                  key={r._id}
+                  id={`review-${r._id}`}
+                  className={`md-review ${isFresh ? 'md-review--fresh' : 'md-review--rotten'}`}
+                >
+                  {/* ── Poster thumbnail ─────────────────────────────── */}
+                  <div className="md-review__poster">
+                    {movieData?.poster ? (
+                      <img src={movieData.poster} alt={movieTitle} draggable="false" />
+                    ) : (
+                      <div className="md-review__poster-fallback">
+                        {(movieTitle || '?')[0].toUpperCase()}
+                      </div>
+                    )}
                   </div>
-                  {r.review_score && (
-                    <span className="md-review__score">{r.review_score}</span>
-                  )}
+
+                  {/* ── Card body ─────────────────────────────────────── */}
+                  <div className="md-review__body">
+
+                    {/* Movie title + fresh/rotten badge */}
+                    <div className="md-review__top">
+                      <span className="md-review__movie-title">{movieTitle}</span>
+                      <span className={`md-review__type-badge ${isFresh ? 'md-review__type-badge--fresh' : 'md-review__type-badge--rotten'}`}>
+                        {isFresh ? '🍅 Fresh' : '🤢 Rotten'}
+                      </span>
+                    </div>
+
+                    {/* Reviewer info row */}
+                    <div className="md-review__meta">
+                      <span className="md-review__critic">
+                        {r.critic_name || 'Anonymous'}
+                        {r.top_critic && <Award size={11} className="md-review__tc-badge" />}
+                      </span>
+                      {r.publisher_name && (
+                        <span className="md-review__pub"> &middot; {r.publisher_name}</span>
+                      )}
+                      {r.review_date && (
+                        <span className="md-review__pub">
+                          {' '}&middot; {new Date(r.review_date).toLocaleDateString()}
+                        </span>
+                      )}
+                      {r.review_score && (
+                        <span className="md-review__score">{r.review_score}</span>
+                      )}
+                    </div>
+
+                    {/* Review content — truncated when long */}
+                    <p className="md-review__content">
+                      {isLong && !isExpanded ? content.slice(0, PREVIEW_LEN) + '…' : content}
+                    </p>
+
+                    {isLong && (
+                      <button
+                        className="md-review__toggle"
+                        onClick={() => toggleReviewExpand(r._id)}
+                      >
+                        {isExpanded ? 'Show less ▲' : 'Read more ▼'}
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <p className="md-review__content">{r.review_content}</p>
-              </div>
-            ))}
+              );
+            })}
 
             {reviews.length === 0 && (
               <p className="md-section__empty">
