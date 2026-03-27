@@ -56,14 +56,11 @@ export default function Navbar() {
           <span className="navbar__logo-text">N</span>eView
         </Link>
 
-        {/* Primary nav links — Reviews & Awards first, then genres */}
+        {/* Primary nav links */}
         <div className="navbar__links">
           <Link to="/search" className="navbar__link">Reviews</Link>
           <Link to="/awards" className="navbar__link">Awards</Link>
-          <Link to="/search?genre=Action" className="navbar__link">Action</Link>
-          <Link to="/search?genre=Comedy" className="navbar__link">Comedy</Link>
-          <Link to="/search?genre=Drama" className="navbar__link">Drama</Link>
-          <Link to="/search?genre=Horror" className="navbar__link">Horror</Link>
+          <Link to="/films" className="navbar__link">Films</Link>
         </div>
       </div>
 

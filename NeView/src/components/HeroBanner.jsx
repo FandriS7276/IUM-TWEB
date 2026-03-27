@@ -222,7 +222,7 @@ export default function HeroBanner() {
         <div className="hero__meta">
           {movie.tomatometer !== null && movie.tomatometer !== undefined && (
             <span className="hero__badge hero__badge--tomato">
-              {movie.tomatometer >= 60 ? '🍅' : '🤢'} {movie.tomatometer}%
+              {movie.tomatometer >= 60 ? '🍅' : '🤢'} {Math.round(movie.tomatometer)}%
             </span>
           )}
           {movie.year && <span className="hero__badge">{movie.year}</span>}

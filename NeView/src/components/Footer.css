@@ -1,7 +1,9 @@
 /* ── Footer ───────────────────────────────────────────────────── */
 .footer {
   margin-top: auto;
-  padding: var(--space-2xl) 0 var(--space-xl);
+  /* Extra bottom padding so expanded movie-card overlays near the bottom
+     of the page are never clipped by the footer edge.               */
+  padding: var(--space-2xl) 0 160px;
   border-top: 1px solid var(--border-subtle);
 }
 

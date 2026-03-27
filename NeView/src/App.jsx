@@ -15,6 +15,7 @@ import MovieDetailPage from './pages/MovieDetailPage';
 import SearchPage from './pages/SearchPage';
 import ProfilePage from './pages/ProfilePage';
 import AwardsPage from './pages/AwardsPage';
+import FilmsPage from './pages/FilmsPage';
 import './index.css';
 
 export default function App() {
@@ -30,6 +31,7 @@ export default function App() {
           <Route path="/search" element={<SearchPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/awards" element={<AwardsPage />} />
+          <Route path="/films" element={<FilmsPage />} />
         </Routes>
         <Footer />
       </BrowserRouter>
