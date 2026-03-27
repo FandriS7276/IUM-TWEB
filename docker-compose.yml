@@ -92,6 +92,8 @@ services:
       # Local .env:  redis://localhost:6379
       # Docker:      redis://redis:6379  ← "redis" = the Redis container above
       REDIS_URL: redis://redis:6379
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
 
     depends_on:
       redis:
