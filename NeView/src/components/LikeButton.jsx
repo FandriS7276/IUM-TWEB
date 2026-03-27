@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { moviesAPI } from "../services/api";
 
 const COOLDOWN_MS = 4800; // 4.8s — slightly under backend's 5s to avoid race
 
@@ -63,40 +64,26 @@ export default function LikeButton({ movieId, initialLiked = false, initialCount
     setCooldown(Math.ceil(COOLDOWN_MS / 1000));
 
     try {
-      const res = await fetch(`/api/movies/${movieId}/like`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include", // Send auth cookies
-      });
-
-      if (res.status === 429) {
-        // Rate limited — rollback optimistic update
-        setLiked(prevLiked);
-        setCount(prevCount);
-
-        const data = await res.json();
-        // Set cooldown to whatever the server says
-        setCooldown(data.retryAfter || Math.ceil(COOLDOWN_MS / 1000));
-        return;
-      }
-
-      if (!res.ok) {
-        // Server error — rollback
-        setLiked(prevLiked);
-        setCount(prevCount);
-        setCooldown(0); // Allow immediate retry on server errors
-        console.error("Like toggle failed:", res.status);
-        return;
-      }
-
+      await moviesAPI.likeMovie(movieId);
       // Success — optimistic update was correct, nothing to do
       // The count from PostgreSQL will sync on next page load
     } catch (err) {
-      // Network error — rollback
+      const status = err.response?.status;
+
+      if (status === 429) {
+        // Rate limited — rollback optimistic update
+        setLiked(prevLiked);
+        setCount(prevCount);
+        // Set cooldown to whatever the server says
+        setCooldown(err.response?.data?.retryAfter || Math.ceil(COOLDOWN_MS / 1000));
+        return;
+      }
+
+      // Server or network error — rollback
       setLiked(prevLiked);
       setCount(prevCount);
-      setCooldown(0);
-      console.error("Like toggle network error:", err);
+      setCooldown(0); // Allow immediate retry on errors
+      console.error("Like toggle failed:", status ?? err.message);
     } finally {
       setLoading(false);
     }
