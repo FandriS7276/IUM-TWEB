@@ -15,6 +15,7 @@ import com.films.api.dto.ActorDTO;
 import com.films.api.dto.LanguageDTO;
 import com.films.api.dto.MovieCardDTO;
 import com.films.api.dto.MovieDetailDTO;
+import com.films.api.dto.MovieExpandedDTO;
 import com.films.api.dto.MovieHoverDTO;
 import com.films.api.dto.MovieSlimDTO;
 import com.films.api.dto.MovieSummaryDTO;
@@ -405,15 +406,17 @@ public class MovieService {
         }
 
         /**
-         * Tier 2.5: Expanded card data — full description + actors.
+         * Tier 2.5: Expanded card data — full description + genres + leading cast.
          *
          * Fetched when the user clicks the chevron-down button on the overlay.
-         * Returns the full description (no truncation) plus the cast list,
-         * without the full detail weight (crew, releases, languages, etc.).
+         * Returns the full (untruncated) description, the genre list, and the
+         * cast list so the expanded overlay section feels like a mini-detail view.
+         * Deliberately excludes crew, releases, languages, studios, and themes —
+         * those live in the full Tier 3 MovieDetailDTO.
          *
          * @param movieId integer movie ID
          */
-        public MovieCardDTO getExpandedData(Integer movieId) {
+        public MovieExpandedDTO getExpandedData(Integer movieId) {
                 if (movieId == null) throw new MovieNotFoundException("id=null", List.of());
                 Movie movie = movieRepository.findById(movieId)
                         .orElseThrow(() -> new MovieNotFoundException(
@@ -428,7 +431,12 @@ public class MovieService {
                         .map(Poster::getLink)
                         .orElse(null);
 
-                return new MovieCardDTO(
+                List<ActorDTO> actors = actorRepository.findByMovieIdOrderByName(movieId)
+                        .stream()
+                        .map(a -> new ActorDTO(a.getName(), a.getRole()))
+                        .toList();
+
+                return new MovieExpandedDTO(
                         movie.getId(),
                         movie.getName(),
                         movie.getDate(),
@@ -437,8 +445,55 @@ public class MovieService {
                         movie.getDescription(),
                         genres,
                         movie.getMinute(),
-                        movie.getLikes()
+                        movie.getLikes(),
+                        actors
                 );
+        }
+
+        /**
+         * Returns slim card data for movies of a given genre, sorted by rating.
+         *
+         * Used by the homepage genre carousels. Returns only id, name, and poster
+         * (same as the slim batch) to keep the payload small — hover data is
+         * fetched lazily by MovieCard as usual.
+         *
+         * @param genre  genre name (case-insensitive), e.g. "Action", "Drama"
+         * @param limit  max results (capped at 50)
+         */
+        public List<MovieSlimDTO> getMoviesByGenre(String genre, int limit) {
+                if (genre == null || genre.isBlank()) return List.of();
+
+                int safeLimit = Math.min(limit, 50);
+
+                // Fetch top-rated movie IDs for this genre in one native query
+                List<Integer> ids = genreRepository.findTopMovieIdsByGenre(genre.trim(), safeLimit);
+                if (ids.isEmpty()) return List.of();
+
+                // Batch-fetch the matching Movie rows
+                List<Movie> movies = movieRepository.findAllById(ids);
+                if (movies.isEmpty()) return List.of();
+
+                // Batch-fetch posters
+                Map<Integer, String> posterMap = posterRepository.findByMovieIdIn(ids)
+                        .stream()
+                        .collect(Collectors.toMap(Poster::getMovieId, Poster::getLink, (a, b) -> a));
+
+                // Return in the same rating-desc order returned by the native query
+                Map<Integer, Movie> movieById = movies.stream()
+                        .collect(Collectors.toMap(Movie::getId, m -> m, (a, b) -> a));
+
+                return ids.stream()
+                        .filter(movieById::containsKey)
+                        .map(id -> {
+                                Movie m = movieById.get(id);
+                                return new MovieSlimDTO(
+                                        m.getId(),
+                                        m.getName(),
+                                        posterMap.get(m.getId()),
+                                        m.getLikes()
+                                );
+                        })
+                        .toList();
         }
 
         /**
