@@ -28,11 +28,49 @@ import { Types } from 'mongoose';
 import Like from '../schema/likeSchema';
 import redisClient from '../database/redisClient';
 import { publishLikeEvent, pgPool } from '../services/likeSync';
-import { trackLike } from '../services/popularityCache';
+import { trackLike, trackView } from '../services/popularityCache';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const LIKE_COOLDOWN_SECONDS = 5;
+
+// ─── View tracking ────────────────────────────────────────────────────────────
+
+/**
+ * Rate-limit: 30 view records per minute per IP.
+ * Prevents bots from artificially inflating popularity counters while still
+ * allowing normal browsing (a user opening 30 movie pages per minute is fine).
+ */
+export const viewLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    message: { success: false, message: 'Too many requests.' },
+    keyGenerator: (req) => req.ip ?? 'unknown',
+});
+
+/**
+ * POST /api/movies/view
+ * Records a movie page view for popularity tracking.
+ * Public — no auth required. Body: { title: string }
+ *
+ * Returns 202 immediately; the Redis write happens in the background so a
+ * slow or unavailable Redis instance never blocks the page load.
+ */
+export const recordView = async (req: Request, res: Response): Promise<void> => {
+    const { title } = req.body as { title?: string };
+
+    if (!title || typeof title !== 'string' || !title.trim()) {
+        res.status(400).json({ success: false, message: 'title is required' });
+        return;
+    }
+
+    // Fire-and-forget — a failed Redis write must never block the caller
+    trackView(title.trim()).catch(() => {
+        console.warn('[recordView] trackView failed (non-fatal).');
+    });
+
+    res.status(202).json({ success: true });
+};
 
 // ─── Rate-limit middleware (global API safety net) ────────────────────────────
 
