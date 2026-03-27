@@ -3,6 +3,7 @@ import reviewsRouter from './reviews';
 import oscarRouter from './oscar';
 import popularRouter from './popular';
 import usersRouter from './users';
+import likesRouter from './likes';
 import { addMovieTitle } from '../services/movieCache';
 
 const router = Router();
@@ -12,6 +13,7 @@ router.use('/reviews', reviewsRouter);
 router.use('/awards', oscarRouter);
 router.use('/popular', popularRouter);
 router.use('/user', usersRouter);
+router.use('/movies', likesRouter);
 
 // Root health check
 router.get('/', (req: Request, res: Response) => {

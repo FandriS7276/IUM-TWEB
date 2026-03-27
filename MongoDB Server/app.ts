@@ -18,6 +18,7 @@ import { refreshDailyPopularity, refreshWeeklyPopularity } from './services/popu
 import { initCategoryWatcher } from './services/oscarCache';
 import apiRouter from './routes/index';
 import { refreshSnubbedCache } from './services/snubbedCache';
+import { startLikeSyncWorker, reconcileLikeCounts } from './services/likeSync';
 
 // Cron scheduler - refreshes daily and weekly caches
 cron.schedule('5 0 * * *', async () => {
@@ -36,21 +37,40 @@ cron.schedule('5 0 * * 0', async () => {
     }
 }, { timezone: 'UTC' });
 
+// Nightly reconciliation — corrects any PostgreSQL likes drift at 3:00 AM UTC
+cron.schedule('0 3 * * *', async () => {
+    try {
+        await reconcileLikeCounts();
+    } catch (err) {
+        console.error('Likes reconciliation failed:', err);
+    }
+}, { timezone: 'UTC' });
+
 const app = express();
 
-// Rate limiting: max 100 requests per 15 minutes per IP
+// Only count write operations (POST, PUT, PATCH, DELETE) against rate limits.
+// GET/HEAD/OPTIONS are read-only and should never lock out a browsing user.
+const isWriteRequest = (req: Request): boolean =>
+    !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
+
+// Broad safety net: max 200 write requests per 15 minutes per IP.
+// Browsing (GET) is completely exempt — only mutations count.
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 100,
+    max: 200,
+    skip: (req: Request) => !isWriteRequest(req),
     message: {
         success: false,
         message: 'Too many requests, please try again after 15 minutes',
     }
 });
 
+// API-level write limiter: max 60 write requests per minute per IP.
+// Prevents burst abuse (e.g. rapid review/like spam) without affecting reads.
 const apiLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 60,
+    skip: (req: Request) => !isWriteRequest(req),
     message: { success: false, message: 'API rate limit hit – slow down' },
 });
 
@@ -102,6 +122,7 @@ initSocket(server);
         });*/
         await initCategoryWatcher();
         await refreshSnubbedCache();
+        startLikeSyncWorker();
 
         const PORT = process.env.PORT || 4000;
         server.listen(PORT, () => {
