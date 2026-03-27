@@ -26,6 +26,7 @@
  *   the stale request is cancelled cleanly.
  */
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { Award, Trophy } from '../components/Icons';
 import { awardsAPI } from '../services/api';
 import { usePerPage } from '../hooks/usePerPage';
@@ -83,6 +84,17 @@ const SORT_OPTIONS = [
   { value: 'film-desc',             label: 'Title (Z–A)'       },
 ];
 
+/**
+ * Per-tab contextual badge config — shown as a small pill on each card
+ * so users always know which list they're looking at.
+ */
+const TAB_BADGE = {
+  oscars:        null,  // Oscar tab needs no extra badge
+  controversial: { label: '⚠ Controversial Win',  cls: 'award-card__tab-badge--controversial' },
+  neverWon:      { label: '📋 Never Won',          cls: 'award-card__tab-badge--never-won'     },
+  snubbed:       { label: '🚫 Snubbed',            cls: 'award-card__tab-badge--snubbed'        },
+};
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function AwardsPage() {
@@ -117,6 +129,12 @@ export default function AwardsPage() {
     from_date: '',
     to_date:   '',
   });
+
+  /**
+   * Set of card keys whose awards list is expanded.
+   * Keyed by `entry.film || entry._id || String(index)`.
+   */
+  const [expandedCards, setExpandedCards] = useState(new Set());
 
   // ── Cache ──────────────────────────────────────────────────────────────
   /**
@@ -245,6 +263,8 @@ export default function AwardsPage() {
   /** Switch tabs — previous page position is preserved in pageByTab */
   const switchTab = useCallback((newTab) => {
     setTab(newTab);
+    // Clear card expansions when switching tabs so stale expansions don't persist
+    setExpandedCards(new Set());
   }, []);
 
   /**
@@ -271,6 +291,19 @@ export default function AwardsPage() {
     setPerPage(value);
     setPageByTab({ oscars: 1, controversial: 1, neverWon: 1, snubbed: 1 });
   }, [setPerPage]);
+
+  /**
+   * Toggle the expanded awards list for a specific card.
+   * Uses a functional update so multiple rapid toggles are safe.
+   */
+  const toggleCardExpand = useCallback((cardKey) => {
+    setExpandedCards((prev) => {
+      const next = new Set(prev);
+      if (next.has(cardKey)) next.delete(cardKey);
+      else next.add(cardKey);
+      return next;
+    });
+  }, []);
 
   // Check if any Oscar filter is active (for showing the reset button)
   const hasActiveFilters =
@@ -406,67 +439,95 @@ export default function AwardsPage() {
         {!loading && !error && (
           <>
             <div className="awards-grid">
-              {data.map((entry, index) => (
-                <div key={entry.film || entry._id || index} className="award-card">
-                  <div className="award-card__year">
-                    {entry.year_film || entry.year || entry.year_ceremony || ''}
-                  </div>
-                  <div className="award-card__info">
-                    <h3 className="award-card__film">
-                      {entry.film || entry.title || entry.movie_title || entry.name || 'Unknown'}
-                    </h3>
-                    <div className="award-card__stats">
-                      {entry.winsCount !== undefined && (
-                        <span className="award-card__wins">
-                          <Award size={14} /> {entry.winsCount} wins
-                        </span>
-                      )}
-                      {entry.totalNominations !== undefined && (
-                        <span className="award-card__noms">
-                          {entry.totalNominations} nominations
-                        </span>
-                      )}
-                      {entry.nominations !== undefined && (
-                        <span className="award-card__noms">
-                          {entry.nominations} nominations
-                        </span>
-                      )}
-                      {entry.rotten_count !== undefined && (
-                        <span className="award-card__noms">
-                          {entry.rotten_count} rotten reviews
-                        </span>
-                      )}
-                      {entry.stats?.tomatometer !== undefined && (
-                        <span className="award-card__noms">
-                          {entry.stats.tomatometer}% tomatometer
-                        </span>
-                      )}
-                      {entry.category && !entry.awards && (
-                        <span className="award-card__noms">{entry.category}</span>
-                      )}
+              {data.map((entry, index) => {
+                const cardKey    = entry.film || entry._id || String(index);
+                const isExpanded = expandedCards.has(cardKey);
+                const filmTitle  = entry.film || entry.title || entry.movie_title || entry.name || 'Unknown';
+                const filmLink   = `/movie/${encodeURIComponent(filmTitle)}`;
+                const tabBadge   = TAB_BADGE[tab];
+
+                return (
+                  <div key={cardKey} className={`award-card award-card--${tab}`}>
+                    {/* Year column */}
+                    <div className="award-card__year">
+                      {entry.year_film || entry.year || entry.year_ceremony || ''}
                     </div>
 
-                    {/* Show up to 3 award categories with overflow badge */}
-                    {entry.awards && (
-                      <div className="award-card__categories">
-                        {entry.awards.slice(0, 3).map((a, i) => (
-                          <span
-                            key={i}
-                            className={`award-card__cat ${a.winner ? 'award-card__cat--won' : ''}`}
-                          >
-                            {a.category}
-                          </span>
-                        ))}
-                        {entry.awards.length > 3 && (
-                          <span className="award-card__cat">
-                            +{entry.awards.length - 3} more
+                    <div className="award-card__info">
+                      {/* Tab-contextual badge (not shown on Oscar tab) */}
+                      {tabBadge && (
+                        <span className={`award-card__tab-badge ${tabBadge.cls}`}>
+                          {tabBadge.label}
+                        </span>
+                      )}
+
+                      {/* Film title — links to the movie detail page */}
+                      <h3 className="award-card__film">
+                        <Link to={filmLink} className="award-card__film-link">
+                          {filmTitle}
+                        </Link>
+                      </h3>
+
+                      {/* Stats row */}
+                      <div className="award-card__stats">
+                        {entry.winsCount !== undefined && (
+                          <span className="award-card__wins">
+                            <Award size={14} /> {entry.winsCount} wins
                           </span>
                         )}
+                        {entry.totalNominations !== undefined && (
+                          <span className="award-card__noms">
+                            {entry.totalNominations} nominations
+                          </span>
+                        )}
+                        {entry.nominations !== undefined && (
+                          <span className="award-card__noms">
+                            {entry.nominations} nominations
+                          </span>
+                        )}
+                        {entry.rotten_count !== undefined && (
+                          <span className="award-card__noms">
+                            {entry.rotten_count} rotten reviews
+                          </span>
+                        )}
+                        {entry.stats?.tomatometer !== undefined && (
+                          <span className="award-card__tomatometer">
+                            🍅 {Math.round(entry.stats.tomatometer)}%
+                          </span>
+                        )}
+                        {entry.category && !entry.awards && (
+                          <span className="award-card__noms">{entry.category}</span>
+                        )}
                       </div>
-                    )}
+
+                      {/* Award category tags with expand/collapse */}
+                      {entry.awards && (
+                        <div className="award-card__categories">
+                          {(isExpanded ? entry.awards : entry.awards.slice(0, 3)).map((a, i) => (
+                            <span
+                              key={i}
+                              className={`award-card__cat ${a.winner ? 'award-card__cat--won' : ''}`}
+                            >
+                              {a.category}
+                            </span>
+                          ))}
+                          {entry.awards.length > 3 && (
+                            <button
+                              className={`award-card__more-btn ${isExpanded ? 'award-card__more-btn--expanded' : ''}`}
+                              onClick={() => toggleCardExpand(cardKey)}
+                              aria-expanded={isExpanded}
+                            >
+                              {isExpanded
+                                ? '▲ Show less'
+                                : `+${entry.awards.length - 3} more`}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {data.length === 0 && (
