@@ -29,7 +29,7 @@ const SORT_OPTIONS = [
 export default function FilmsPage() {
   const [sortBy, setSortBy]       = useState('name-asc');
   const [page, setPage]           = useState(1);
-  const [perPage, setPerPage]     = usePerPage();
+  const { perPage, setPerPage }   = usePerPage();
   const [movies, setMovies]       = useState([]);
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading]     = useState(true);
@@ -50,7 +50,7 @@ export default function FilmsPage() {
 
       try {
         const { data } = await moviesAPI.getAll({
-          page,
+          page:   page - 1,   // backend is 0-indexed; frontend state is 1-indexed
           size:   perPage,
           sortBy: sortField,
           order,
