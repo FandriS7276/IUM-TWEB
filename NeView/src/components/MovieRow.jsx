@@ -11,9 +11,7 @@
  *
  * Scrolling methods supported:
  *  1. Arrow buttons (click)
- *  2. Mouse drag (click-drag horizontally) — free-flowing, no snap
- *  3. Scroll wheel (vertical deltaY → horizontal scrollLeft)
- *  4. Touch/swipe (native touch scrolling via CSS overflow-x)
+ *  2. Touch/swipe (native touch scrolling via CSS overflow-x)
  *
  * No scroll-snap is applied — the carousel scrolls freely without
  * magnetizing to card boundaries, keeping the experience smooth.
@@ -21,11 +19,17 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from './Icons';
 import MovieCard from './MovieCard';
+import ReviewCard from './ReviewCard';
 import './MovieRow.css';
 
 const SCROLL_AMOUNT = 800;
 
-export default function MovieRow({ title, movies = [] }) {
+/**
+ * @param {string}  title    - Section heading
+ * @param {array}   movies   - Items to display (movies or reviews)
+ * @param {'movie'|'review'} variant - 'review' renders ReviewCards instead of MovieCards
+ */
+export default function MovieRow({ title, movies = [], variant = 'movie' }) {
   const rowRef = useRef(null);
   const sectionRef = useRef(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -59,11 +63,6 @@ export default function MovieRow({ title, movies = [] }) {
     return () => observer.disconnect();
   }, []);
 
-  // ── Drag-to-scroll state ──────────────────────────────────────
-  const isDragging = useRef(false);
-  const dragStartX = useRef(0);
-  const dragScrollLeft = useRef(0);
-
   /** Recalculate whether arrows should be visible */
   const updateArrows = useCallback(() => {
     const el = rowRef.current;
@@ -85,49 +84,6 @@ export default function MovieRow({ title, movies = [] }) {
     setTimeout(updateArrows, 400);
   };
 
-  // ── Mouse drag handlers ───────────────────────────────────────
-  const handleMouseDown = useCallback((e) => {
-    const el = rowRef.current;
-    if (!el) return;
-    isDragging.current = true;
-    dragStartX.current = e.pageX - el.offsetLeft;
-    dragScrollLeft.current = el.scrollLeft;
-  }, []);
-
-  const handleMouseMove = useCallback((e) => {
-    if (!isDragging.current) return;
-    e.preventDefault();
-    const el = rowRef.current;
-    if (!el) return;
-    const x = e.pageX - el.offsetLeft;
-    const walk = (x - dragStartX.current) * 1.5;
-    el.scrollLeft = dragScrollLeft.current - walk;
-  }, []);
-
-  const handleMouseUp = useCallback(() => {
-    isDragging.current = false;
-    updateArrows();
-  }, [updateArrows]);
-
-  // ── Wheel → horizontal scroll conversion ─────────────────────
-  const handleWheel = useCallback((e) => {
-    const el = rowRef.current;
-    if (!el) return;
-
-    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-      e.preventDefault();
-      el.scrollLeft += e.deltaY;
-      updateArrows();
-    }
-  }, [updateArrows]);
-
-  useEffect(() => {
-    const el = rowRef.current;
-    if (!el) return;
-    el.addEventListener('wheel', handleWheel, { passive: false });
-    return () => el.removeEventListener('wheel', handleWheel);
-  }, [handleWheel]);
-
   return (
     <section className="movie-row" ref={sectionRef}>
       <h2 className="movie-row__title">{title}</h2>
@@ -144,25 +100,25 @@ export default function MovieRow({ title, movies = [] }) {
           </button>
         )}
 
-        {/* Scrollable track with drag support */}
+        {/* Scrollable track */}
         <div
           className="movie-row__track"
           ref={rowRef}
           onScroll={updateArrows}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
         >
           {isVisible
-            ? movies.map((movie, index) => (
-                <MovieCard key={movie._id || movie.id || index} movie={movie} />
-              ))
+            ? movies.map((item, index) =>
+                variant === 'review' ? (
+                  <ReviewCard key={item._id || index} review={item} />
+                ) : (
+                  <MovieCard key={item._id || item.id || index} movie={item} />
+                )
+              )
             : /* Placeholder slots preserve layout height while invisible */
               movies.map((_, index) => (
                 <div
                   key={index}
-                  className="movie-card"
+                  className={variant === 'review' ? 'review-card' : 'movie-card'}
                   style={{ visibility: 'hidden' }}
                 />
               ))

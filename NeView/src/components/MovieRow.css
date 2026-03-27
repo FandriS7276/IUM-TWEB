@@ -42,8 +42,8 @@
   overflow-x: auto;
   overflow-y: hidden;
 
-  /* Hide the native scrollbar — users scroll via arrow buttons,
-     drag, scroll wheel, or trackpad/touch gestures */
+  /* Hide the native scrollbar — users scroll via arrow buttons
+     or trackpad/touch gestures */
   -ms-overflow-style: none;
   scrollbar-width: none;
 }

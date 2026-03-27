@@ -7,12 +7,12 @@
  * Data loading tiers:
  *  - Tier 1 (card render): poster + title only — loaded by HomePage
  *  - Tier 2 (hover):       genres, short description, rating — fetched on hover
- *  - Tier 2.5 (expand):    full description — fetched on chevron-down click
+ *  - Tier 2.5 (expand):    full description — fetched automatically on overlay open
  *  - Tier 3 (play):        full detail page — navigates to /movie/:id
  *
- * Hover behavior (unchanged):
+ * Hover behavior:
  *  - 600ms delay before showing — prevents accidental popups
- *  - Dismisses immediately on any scroll/wheel
+ *  - Dismisses immediately on scroll; re-hovering allowed 300ms after scroll stops
  *  - Portal to document.body escapes carousel's overflow:hidden
  *  - 100ms grace period on leave to handle jitter
  *
@@ -39,7 +39,7 @@ function TomatometerBadge({ score }) {
   const isFresh = score >= 60;
   return (
     <span className={`mc-badge ${isFresh ? 'mc-badge--fresh' : 'mc-badge--rotten'}`}>
-      {isFresh ? '🍅' : '🤢'} {score}%
+      {isFresh ? '🍅' : '🤢'} {Math.round(score)}%
     </span>
   );
 }
@@ -66,16 +66,40 @@ export default function MovieCard({ movie }) {
   const cardRef = useRef(null);
   const navigate = useNavigate();
 
-  // ── Dismiss overlay on ANY scroll or wheel event ──────────────
+  // ── Refs to avoid stale closures in event listeners ───────────
+  /** Always holds the current `hovered` value without re-registering listeners */
+  const hoveredRef = useRef(false);
+  useEffect(() => { hoveredRef.current = hovered; }, [hovered]);
+
+  /**
+   * True while the user is actively scrolling (or within 300ms of the last
+   * wheel event). Prevents the hover timer from firing during scroll inertia,
+   * which was causing hovers to never show after a scroll gesture.
+   */
+  const isScrollingRef = useRef(false);
+  const scrollEndTimer = useRef(null);
+
+  // ── Dismiss overlay on scroll; block hovers briefly afterwards ─
   const dismissOverlay = useCallback(() => {
+    // Always cancel any pending hover timer (fired during scroll inertia)
     clearTimeout(hoverTimeout.current);
     clearTimeout(leaveTimeout.current);
-    if (hovered) {
+
+    // Dismiss the visible overlay if one is showing
+    if (hoveredRef.current) {
       setHovered(false);
       setOverlayStyle(null);
-      setExpanded(false); // collapse expanded section on dismiss
+      setExpanded(false);
     }
-  }, [hovered]);
+
+    // Block new hovers for 300ms after the last wheel/scroll event so that
+    // scroll-inertia events don't immediately kill the next hover attempt.
+    isScrollingRef.current = true;
+    clearTimeout(scrollEndTimer.current);
+    scrollEndTimer.current = setTimeout(() => {
+      isScrollingRef.current = false;
+    }, 300);
+  }, []); // No state dependencies — uses refs to stay stable
 
   useEffect(() => {
     window.addEventListener('scroll', dismissOverlay, true);
@@ -84,7 +108,7 @@ export default function MovieCard({ movie }) {
       window.removeEventListener('scroll', dismissOverlay, true);
       window.removeEventListener('wheel', dismissOverlay, true);
     };
-  }, [dismissOverlay]);
+  }, [dismissOverlay]); // dismissOverlay is now stable — registers only once
 
   // Clean up timeouts on unmount
   useEffect(() => {
@@ -174,19 +198,23 @@ export default function MovieCard({ movie }) {
   }, []);
 
   /**
-   * Show the overlay after HOVER_DELAY ms and trigger Tier 2 fetch.
-   * The fetch fires in parallel with the delay so data is often
+   * Show the overlay after HOVER_DELAY ms and trigger Tier 2 + 2.5 fetch.
+   * Both fetches fire in parallel with the delay so data is often
    * ready by the time the overlay animates in.
+   * Skips if the user is still in the scroll-cooldown window.
    */
   const showOverlay = useCallback(() => {
+    // Don't show during or shortly after a scroll gesture
+    if (isScrollingRef.current) return;
     clearTimeout(leaveTimeout.current);
     if (hovered) return;
 
-    // Start fetching hover data immediately — don't wait for the delay.
-    // The 600ms delay is for the visual overlay; the network request
-    // runs in the background so data is ready when the overlay appears.
-    if (!hoverCache.current && movie.id) {
-      fetchHoverData();
+    // Start fetching hover + expanded data immediately — don't wait for the delay.
+    // The 600ms delay is for the visual overlay; the network requests
+    // run in the background so full data is ready when the overlay appears.
+    if (movie.id) {
+      if (!hoverCache.current) fetchHoverData();
+      if (!expandedCache.current) fetchExpandedData();
     }
 
     hoverTimeout.current = setTimeout(() => {
@@ -195,7 +223,7 @@ export default function MovieCard({ movie }) {
       setOverlayStyle(style);
       setHovered(true);
     }, HOVER_DELAY);
-  }, [hovered, computeOverlayPosition, fetchHoverData, movie.id]);
+  }, [hovered, computeOverlayPosition, fetchHoverData, fetchExpandedData, movie.id]);
 
   /**
    * Schedule overlay close with a grace period so moving the
@@ -260,7 +288,10 @@ export default function MovieCard({ movie }) {
   // Resolve display name
   const displayName = movie.name || movie.movie_title || movie.title || 'Untitled';
 
-  // Use hover data for overlay fields when available, fall back to movie prop
+  // Use hover data for overlay fields when available, fall back to movie prop.
+  // Description is short by default (hoverData); clicking chevron sets expanded=true
+  // which swaps in the full description from expandedData (pre-fetched in background).
+  // expanded resets to false every time the overlay closes, so each new hover starts fresh.
   const overlayRating = hoverData?.rating ?? movie.rating;
   const overlayGenres = hoverData?.genres ?? movie.genres ?? [];
   const overlayDesc = expanded
@@ -270,7 +301,7 @@ export default function MovieCard({ movie }) {
   // Shared poster rendering
   const renderPoster = () =>
     movie.poster ? (
-      <img src={movie.poster} alt={displayName} loading="lazy" />
+      <img src={movie.poster} alt={displayName} loading="lazy" draggable="false" />
     ) : (
       <div className="movie-card__placeholder">
         <span className="movie-card__placeholder-title">{displayName}</span>
@@ -286,8 +317,14 @@ export default function MovieCard({ movie }) {
       onMouseMove={cancelClose}
       onMouseLeave={scheduleClose}
     >
-      {/* Poster */}
-      <div className="movie-card-overlay__poster">
+      {/* Poster — clicking it navigates to the movie detail page */}
+      <div
+        className="movie-card-overlay__poster movie-card-overlay__poster--clickable"
+        onClick={goToMovie}
+        role="button"
+        aria-label={`Go to ${displayName}`}
+        title={`Go to ${displayName}`}
+      >
         {renderPoster()}
       </div>
 
@@ -369,6 +406,18 @@ export default function MovieCard({ movie }) {
           <p className="movie-card__desc">{overlayDesc}</p>
         )}
 
+        {/* ── Leading actors (Tier 2.5 — from expanded data) ── */}
+        {expanded && expandedData?.actors?.length > 0 && (
+          <div className="movie-card__actors">
+            <span className="movie-card__actors-label">Cast: </span>
+            {expandedData.actors.slice(0, 5).map((a, i) => (
+              <span key={a.name} className="movie-card__actor">
+                {a.name}{a.role ? ` (${a.role})` : ''}{i < Math.min(expandedData.actors.length, 5) - 1 ? ', ' : ''}
+              </span>
+            ))}
+          </div>
+        )}
+
         {/* ── Expanded section loading indicator ───────────── */}
         {expanded && expandedLoading && (
           <p className="movie-card__desc" style={{ opacity: 0.6 }}>
@@ -387,6 +436,7 @@ export default function MovieCard({ movie }) {
         className="movie-card"
         onMouseEnter={showOverlay}
         onMouseLeave={scheduleClose}
+        onClick={goToMovie}
       >
         <div className="movie-card__poster">{renderPoster()}</div>
       </div>

@@ -15,6 +15,7 @@
   border-radius: var(--radius-sm);
   overflow: hidden;
   transition: opacity var(--transition-fast);
+  cursor: pointer;
 }
 
 .movie-card__poster {
@@ -29,6 +30,10 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* Belt-and-suspenders: prevent native browser image drag in the carousel */
+  -webkit-user-drag: none;
+  user-drag: none;
+  pointer-events: none;
 }
 
 /* Gradient placeholder when no poster image exists */
@@ -84,6 +89,24 @@
 
 .movie-card-overlay__poster .movie-card__placeholder {
   border-radius: 0;
+}
+
+/* Clickable poster — show pointer and a subtle darkening on hover */
+.movie-card-overlay__poster--clickable {
+  cursor: pointer;
+  position: relative;
+}
+
+.movie-card-overlay__poster--clickable::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0);
+  transition: background var(--transition-fast);
+}
+
+.movie-card-overlay__poster--clickable:hover::after {
+  background: rgba(0, 0, 0, 0.25);
 }
 
 /* ── Info panel (below poster in overlay) ─────────────────────── */
@@ -210,4 +233,24 @@
   position: absolute;
   left: -5px;
   color: var(--text-muted);
+}
+
+/* ── Leading actors (Tier 2.5 — shown in expanded section) ────── */
+.movie-card__actors {
+  font-size: 0.62rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-top: 6px;
+}
+
+.movie-card__actors-label {
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-right: 2px;
+}
+
+.movie-card__actor {
+  color: var(--text-secondary);
 }
