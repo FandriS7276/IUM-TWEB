@@ -1,0 +1,209 @@
+{
+  "asyncapi": "2.6.0",
+  "info": {
+    "title": "NeView — Real-Time Chat (Socket.IO)",
+    "version": "1.0.0",
+    "description": "AsyncAPI spec for the Socket.IO server embedded in the MongoDB/Express backend (port 4000).\n\nThe chat system is **room-based**: every movie has its own room identified by `movie-{movieTitle}`. A client must join a room before it can send or receive messages in that room.\n\n**Connection URL:** `ws://localhost:4000` (Socket.IO transport)\n\n> **Note:** JWT authentication for sockets is planned but not yet implemented. Currently any connected client can join any room.",
+    "contact": {
+      "name": "NeView Team"
+    }
+  },
+  "servers": {
+    "production": {
+      "url": "localhost:4000",
+      "protocol": "socketio",
+      "description": "Socket.IO server co-hosted with the Express REST API."
+    }
+  },
+  "channels": {
+    "/": {
+      "description": "The root Socket.IO namespace. All chat events flow through this namespace. Room isolation is handled by Socket.IO rooms (not separate namespaces).",
+      "subscribe": {
+        "summary": "Events the **client receives** from the server",
+        "operationId": "receiveEvent",
+        "message": {
+          "oneOf": [
+            {
+              "$ref": "#/components/messages/Joined"
+            },
+            {
+              "$ref": "#/components/messages/IncomingChatMessage"
+            }
+          ]
+        }
+      },
+      "publish": {
+        "summary": "Events the **client sends** to the server",
+        "operationId": "sendEvent",
+        "message": {
+          "oneOf": [
+            {
+              "$ref": "#/components/messages/JoinMovie"
+            },
+            {
+              "$ref": "#/components/messages/LeaveMovie"
+            },
+            {
+              "$ref": "#/components/messages/SendChatMessage"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "components": {
+    "messages": {
+      "JoinMovie": {
+        "name": "joinMovie",
+        "title": "Join a movie chat room",
+        "summary": "Client → Server. Subscribe to a movie's chat room. Must be sent before `chatMessage` will be delivered for that movie.",
+        "payload": {
+          "$ref": "#/components/schemas/JoinMoviePayload"
+        },
+        "examples": [
+          {
+            "name": "Join Parasite room",
+            "payload": "Parasite"
+          }
+        ]
+      },
+      "LeaveMovie": {
+        "name": "leaveMovie",
+        "title": "Leave a movie chat room",
+        "summary": "Client → Server. Unsubscribe from a movie's chat room. Emitted automatically by the frontend (useSocketChat) when the MovieDetailPage unmounts or the active movie changes. The server calls socket.leave(room) so no further messages for that room are broadcast to this socket. Without this handler the socket would accumulate memberships in every room visited during a session (server-side resource leak).",
+        "payload": {
+          "$ref": "#/components/schemas/LeaveMoviePayload"
+        },
+        "examples": [
+          {
+            "name": "Leave Parasite room",
+            "payload": "Parasite"
+          }
+        ]
+      },
+      "SendChatMessage": {
+        "name": "chatMessage",
+        "title": "Send a chat message",
+        "summary": "Client → Server. Broadcast a message to everyone in the movie's room (including the sender). The client must have joined the room first via joinMovie.",
+        "payload": {
+          "$ref": "#/components/schemas/SendChatMessagePayload"
+        },
+        "examples": [
+          {
+            "name": "Send a message in the Parasite room",
+            "payload": {
+              "movieTitle": "Parasite",
+              "message": "The ending is incredible!",
+              "user": "cinephile42"
+            }
+          }
+        ]
+      },
+      "Joined": {
+        "name": "joined",
+        "title": "Room join confirmation",
+        "summary": "Server → Client. Sent back to the client immediately after a successful `joinMovie` event to confirm the subscription.",
+        "payload": {
+          "$ref": "#/components/schemas/JoinedPayload"
+        },
+        "examples": [
+          {
+            "name": "Confirmed join for Parasite",
+            "payload": {
+              "message": "Welcome to Parasite chat"
+            }
+          }
+        ]
+      },
+      "IncomingChatMessage": {
+        "name": "chatMessage",
+        "title": "Receive a chat message",
+        "summary": "Server → Client. Broadcast to **all** clients in the room (including the original sender) when any client posts a message via `chatMessage`.",
+        "payload": {
+          "$ref": "#/components/schemas/IncomingChatMessagePayload"
+        },
+        "examples": [
+          {
+            "name": "Message received in Parasite room",
+            "payload": {
+              "user": "cinephile42",
+              "message": "The ending is incredible!",
+              "timestamp": "2025-01-15T20:30:00.000Z"
+            }
+          }
+        ]
+      }
+    },
+    "schemas": {
+      "JoinMoviePayload": {
+        "type": "string",
+        "description": "The exact movie title to join. The server derives the room name as `movie-{movieTitle.trim()}`. Leading/trailing whitespace is stripped.",
+        "example": "Parasite"
+      },
+      "LeaveMoviePayload": {
+        "type": "string",
+        "description": "The exact movie title to leave. The server derives the room name as `movie-{movieTitle.trim()}` and calls socket.leave(room).",
+        "example": "Parasite"
+      },
+      "SendChatMessagePayload": {
+        "type": "object",
+        "required": [
+          "movieTitle",
+          "message",
+          "user"
+        ],
+        "description": "Payload for sending a chat message to a movie room.",
+        "properties": {
+          "movieTitle": {
+            "type": "string",
+            "description": "The movie room to post to (must match the room joined via `joinMovie`).",
+            "example": "Parasite"
+          },
+          "message": {
+            "type": "string",
+            "description": "The chat message text.",
+            "example": "The ending is incredible!"
+          },
+          "user": {
+            "type": "string",
+            "description": "Display name of the sender.",
+            "example": "cinephile42"
+          }
+        }
+      },
+      "JoinedPayload": {
+        "type": "object",
+        "description": "Confirmation sent to the client after successfully joining a room.",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Human-readable welcome message.",
+            "example": "Welcome to Parasite chat"
+          }
+        }
+      },
+      "IncomingChatMessagePayload": {
+        "type": "object",
+        "description": "A chat message broadcast to all clients in the room.",
+        "properties": {
+          "user": {
+            "type": "string",
+            "description": "Display name of the sender.",
+            "example": "cinephile42"
+          },
+          "message": {
+            "type": "string",
+            "description": "The chat message text.",
+            "example": "The ending is incredible!"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp set server-side at broadcast time.",
+            "example": "2025-01-15T20:30:00.000Z"
+          }
+        }
+      }
+    }
+  }
+}

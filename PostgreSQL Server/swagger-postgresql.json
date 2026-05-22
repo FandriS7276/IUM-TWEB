@@ -1,0 +1,998 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "NeView — PostgreSQL API",
+    "description": "Movie catalogue REST API served by the **Spring Boot 3 / PostgreSQL** backend.\n\nCovers the full movie data hierarchy:\n- **Tier 1** slim cards (id, name, poster)\n- **Tier 2** hover overlay (genres, truncated description, rating)\n- **Tier 2.5** expanded card (full description + leading cast)\n- **Tier 3** full detail (actors, crew, releases, languages, studios)\n\nAlso exposes genre carousels, title search, batch resolution, the persistent like counter, and a liveness probe.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "NeView Team"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "Spring Boot server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Movies (PostgreSQL)",
+      "description": "Movie catalogue endpoints served by the Spring Boot / PostgreSQL server (port 8080)."
+    },
+    {
+      "name": "Health",
+      "description": "Liveness probes."
+    }
+  ],
+  "paths": {
+    "/api/movies/{id}/like": {
+      "post": {
+        "tags": [
+          "Movies (PostgreSQL)"
+        ],
+        "summary": "Increment the persistent like counter (PostgreSQL)",
+        "description": "Atomically increments the `movies.likes` column in PostgreSQL for a given\nmovie ID. This endpoint manages the **permanent** like counter only.\n\nFor the user-specific like toggle (which also updates Redis popularity\ncounters and syncs via BullMQ) see `POST /api/movies/{movieId}/like`\non the **MongoDB server**.\n",
+        "operationId": "likeMoviePostgres",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Internal movie ID.",
+            "schema": {
+              "type": "integer",
+              "example": 42
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated like count.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "likes": {
+                      "type": "integer",
+                      "example": 315
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/movies/expanded/{id}": {
+      "get": {
+        "tags": [
+          "Movies (PostgreSQL)"
+        ],
+        "summary": "Tier 2.5 — expanded card data",
+        "description": "Returns the **full** (untruncated) description, genre list, and leading cast.\nFetched when the user clicks the chevron-down on the hover overlay.\n\nResponse is cached with `Cache-Control: public, max-age=1800`.\n",
+        "operationId": "getExpandedData",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Internal movie ID.",
+            "schema": {
+              "type": "integer",
+              "example": 42
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Expanded card data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MovieExpandedDTO"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Movie not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/movies/batch/slim": {
+      "post": {
+        "tags": [
+          "Movies (PostgreSQL)"
+        ],
+        "summary": "Tier 1 — batch resolve titles → slim cards",
+        "description": "Ultra-slim batch resolution for initial card rendering.\nReturns **only** `id`, `name`, and `poster` — no description, genres, or rating.\n\nResponse is cached with `Cache-Control: public, max-age=3600`.\n",
+        "operationId": "getSlimBatch",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "titles"
+                ],
+                "properties": {
+                  "titles": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "example": [
+                      "Parasite",
+                      "Inception"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Slim card data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer",
+                      "example": 2
+                    },
+                    "movies": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MovieSlimDTO"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/movies/search": {
+      "get": {
+        "tags": [
+          "Movies (PostgreSQL)"
+        ],
+        "summary": "Autocomplete / type-ahead title search",
+        "description": "Lightweight search on partial movie titles. Designed for type-ahead\ninputs — returns at most `limit` results (capped at 50).\n",
+        "operationId": "searchMovies",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "description": "Partial title string to search for.",
+            "schema": {
+              "type": "string",
+              "example": "para"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of results (max 50).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search results.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer",
+                      "example": 3
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MovieSummaryDTO"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Liveness probe (PostgreSQL server)",
+        "description": "Returns `{ \"status\": \"ok\" }`. Used by Docker and load balancers.",
+        "operationId": "healthCheck",
+        "responses": {
+          "200": {
+            "description": "Service is healthy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/movies/batch": {
+      "post": {
+        "tags": [
+          "Movies (PostgreSQL)"
+        ],
+        "summary": "Batch resolve titles → enriched cards",
+        "description": "Resolves an array of movie titles into enriched `MovieCardDTO` objects\n(poster, description, genres, rating). Used to enrich popularity data\n(which only stores titles) with full card fields.\n",
+        "operationId": "getMoviesBatch",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "titles"
+                ],
+                "properties": {
+                  "titles": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "example": [
+                      "Parasite",
+                      "Inception",
+                      "The Dark Knight"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resolved movie cards.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer",
+                      "example": 3
+                    },
+                    "movies": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MovieCardDTO"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/movies/{title}": {
+      "get": {
+        "tags": [
+          "Movies (PostgreSQL)"
+        ],
+        "summary": "Tier 3 — full movie detail by title",
+        "description": "Returns the complete dataset for a single movie identified by its **exact title**.\n\nTitle-based (not ID-based) so the frontend and external services never need\nto know internal integer IDs.\n\nOn a **404**, the response also includes up to 5 spelling suggestions.\n",
+        "operationId": "getMovieByTitle",
+        "parameters": [
+          {
+            "name": "title",
+            "in": "path",
+            "required": true,
+            "description": "Exact movie title, URL-encoded (spaces → `%20`).",
+            "schema": {
+              "type": "string",
+              "example": "Parasite"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full movie detail.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "movie": {
+                      "$ref": "#/components/schemas/MovieDetailDTO"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Movie not found — includes title suggestions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string",
+                      "example": "No movie found with title: Parsite"
+                    },
+                    "suggestions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MovieSummaryDTO"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/movies/genre/{genre}": {
+      "get": {
+        "tags": [
+          "Movies (PostgreSQL)"
+        ],
+        "summary": "Movies by genre (homepage carousels)",
+        "description": "Returns slim card data (`id`, `name`, `poster`) for movies of a given genre,\nsorted by rating descending. Used by the homepage genre carousels.\n\nResponse is cached with `Cache-Control: public, max-age=3600`.\n",
+        "operationId": "getMoviesByGenre",
+        "parameters": [
+          {
+            "name": "genre",
+            "in": "path",
+            "required": true,
+            "description": "Genre name (URL-encode if needed, e.g. `Sci-Fi`).",
+            "schema": {
+              "type": "string",
+              "example": "Action"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of results (max 50).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Movies in the requested genre.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "genre": {
+                      "type": "string",
+                      "example": "Action"
+                    },
+                    "count": {
+                      "type": "integer",
+                      "example": 20
+                    },
+                    "movies": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MovieSlimDTO"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/movies/hover/{id}": {
+      "get": {
+        "tags": [
+          "Movies (PostgreSQL)"
+        ],
+        "summary": "Tier 2 — hover overlay data",
+        "description": "Returns genres, a **truncated** description (≤ 200 chars), rating, year,\nand runtime. Fetched on-demand when the user hovers over a card (600 ms delay).\n\nResponse is cached with `Cache-Control: public, max-age=3600`.\n",
+        "operationId": "getHoverData",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Internal movie ID.",
+            "schema": {
+              "type": "integer",
+              "example": 42
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Hover overlay data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MovieHoverDTO"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Movie not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/movies": {
+      "get": {
+        "tags": [
+          "Movies (PostgreSQL)"
+        ],
+        "summary": "List all movies (paginated + sortable)",
+        "description": "Returns a paginated, sortable summary list of the entire movie catalogue.\n\n**Sort options** (`sortBy`): `name`, `rating`, `year`\n**Order options** (`order`): `asc`, `desc`\n\n> **Note:** This endpoint uses **0-indexed** pagination (`page=0` is the first page).\n",
+        "operationId": "getAllMovies",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "0-indexed page number.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Results per page (max 100).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "description": "Field to sort by.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "name",
+                "rating",
+                "year"
+              ],
+              "default": "name"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "description": "Sort direction.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "asc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of movies.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedMoviesDTO"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "LanguageDTO": {
+        "type": "object",
+        "properties": {
+          "language": {
+            "type": "string",
+            "example": "Korean"
+          },
+          "type": {
+            "type": "string",
+            "example": "Spoken"
+          }
+        }
+      },
+      "MovieSlimDTO": {
+        "type": "object",
+        "description": "Tier 1 — ultra-slim card payload: id, name, poster, likes only.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 42
+          },
+          "name": {
+            "type": "string",
+            "example": "Parasite"
+          },
+          "poster": {
+            "type": "string",
+            "nullable": true,
+            "example": "https://cdn.example.com/posters/parasite.jpg"
+          },
+          "likes": {
+            "type": "integer",
+            "example": 314
+          }
+        }
+      },
+      "MovieExpandedDTO": {
+        "type": "object",
+        "description": "Tier 2.5 — expanded card payload: full description + leading cast.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 42
+          },
+          "name": {
+            "type": "string",
+            "example": "Parasite"
+          },
+          "year": {
+            "type": "integer",
+            "example": 2019
+          },
+          "rating": {
+            "type": "number",
+            "format": "double",
+            "nullable": true,
+            "example": 8.6
+          },
+          "poster": {
+            "type": "string",
+            "nullable": true,
+            "example": "https://cdn.example.com/posters/parasite.jpg"
+          },
+          "description": {
+            "type": "string",
+            "description": "Full, untruncated description.",
+            "example": "Greed and class discrimination threaten the newly symbiotic relationship between the wealthy Park family and the destitute Kim clan."
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "Thriller",
+              "Drama"
+            ]
+          },
+          "runtime": {
+            "type": "integer",
+            "nullable": true,
+            "example": 132
+          },
+          "likes": {
+            "type": "integer",
+            "example": 314
+          },
+          "actors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActorDTO"
+            }
+          }
+        }
+      },
+      "ActorDTO": {
+        "type": "object",
+        "description": "Applies to both cast members and crew.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Song Kang-ho"
+          },
+          "role": {
+            "type": "string",
+            "example": "Kim Ki-taek"
+          }
+        }
+      },
+      "ReleaseDTO": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "type": "string",
+            "example": "South Korea"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "example": "2019-05-30"
+          },
+          "type": {
+            "type": "string",
+            "example": "Theatrical"
+          },
+          "rating": {
+            "type": "string",
+            "nullable": true,
+            "example": "R"
+          }
+        }
+      },
+      "PagedMoviesDTO": {
+        "type": "object",
+        "description": "Paginated list of movie summaries.",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "example": 0
+          },
+          "size": {
+            "type": "integer",
+            "example": 20
+          },
+          "totalElements": {
+            "type": "integer",
+            "format": "int64",
+            "example": 1500
+          },
+          "totalPages": {
+            "type": "integer",
+            "example": 75
+          },
+          "movies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MovieSummaryDTO"
+            }
+          }
+        }
+      },
+      "MovieHoverDTO": {
+        "type": "object",
+        "description": "Tier 2 — hover overlay payload: genres, truncated description, rating.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 42
+          },
+          "name": {
+            "type": "string",
+            "example": "Parasite"
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "Thriller",
+              "Drama"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "description": "Truncated to 200 characters server-side.",
+            "example": "Greed and class discrimination threaten the newly symbiotic relationship between…"
+          },
+          "rating": {
+            "type": "number",
+            "format": "double",
+            "nullable": true,
+            "example": 8.6
+          },
+          "year": {
+            "type": "integer",
+            "example": 2019
+          },
+          "runtime": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Runtime in minutes.",
+            "example": 132
+          },
+          "likes": {
+            "type": "integer",
+            "example": 314
+          }
+        }
+      },
+      "MovieSummaryDTO": {
+        "type": "object",
+        "description": "Lightweight representation used in paginated list and search results.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 42
+          },
+          "name": {
+            "type": "string",
+            "example": "Parasite"
+          },
+          "year": {
+            "type": "integer",
+            "example": 2019
+          },
+          "rating": {
+            "type": "number",
+            "format": "double",
+            "nullable": true,
+            "example": 8.6
+          },
+          "poster": {
+            "type": "string",
+            "nullable": true,
+            "example": "https://cdn.example.com/posters/parasite.jpg"
+          }
+        }
+      },
+      "MovieCardDTO": {
+        "type": "object",
+        "description": "Enriched card payload used in batch lookups (poster, description, genres, rating).",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 42
+          },
+          "name": {
+            "type": "string",
+            "example": "Parasite"
+          },
+          "year": {
+            "type": "integer",
+            "example": 2019
+          },
+          "rating": {
+            "type": "number",
+            "format": "double",
+            "nullable": true,
+            "example": 8.6
+          },
+          "poster": {
+            "type": "string",
+            "nullable": true,
+            "example": "https://cdn.example.com/posters/parasite.jpg"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "example": "Greed and class discrimination threaten the newly symbiotic relationship…"
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "Thriller",
+              "Drama"
+            ]
+          },
+          "runtime": {
+            "type": "integer",
+            "nullable": true,
+            "example": 132
+          },
+          "likes": {
+            "type": "integer",
+            "example": 314
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "message": {
+            "type": "string",
+            "example": "An error occurred."
+          }
+        }
+      },
+      "MovieDetailDTO": {
+        "type": "object",
+        "description": "Tier 3 — full movie detail: all satellite data (actors, crew, releases, etc.).",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 42
+          },
+          "name": {
+            "type": "string",
+            "example": "Parasite"
+          },
+          "year": {
+            "type": "integer",
+            "example": 2019
+          },
+          "tagline": {
+            "type": "string",
+            "nullable": true,
+            "example": "Act like you own the place."
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "example": "Greed and class discrimination threaten the newly symbiotic relationship between the wealthy Park family and the destitute Kim clan."
+          },
+          "runtime": {
+            "type": "integer",
+            "nullable": true,
+            "example": 132
+          },
+          "rating": {
+            "type": "number",
+            "format": "double",
+            "nullable": true,
+            "example": 8.6
+          },
+          "poster": {
+            "type": "string",
+            "nullable": true,
+            "example": "https://cdn.example.com/posters/parasite.jpg"
+          },
+          "likes": {
+            "type": "integer",
+            "example": 314
+          },
+          "genres": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "Thriller",
+              "Drama"
+            ]
+          },
+          "themes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "Class Struggle",
+              "Family"
+            ]
+          },
+          "countries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "South Korea"
+            ]
+          },
+          "studios": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "Barunson E&A"
+            ]
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LanguageDTO"
+            }
+          },
+          "releases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReleaseDTO"
+            }
+          },
+          "actors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActorDTO"
+            }
+          },
+          "crew": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActorDTO"
+            }
+          }
+        }
+      }
+    },
+    "parameters": {
+      "PageParam": {
+        "name": "page",
+        "in": "query",
+        "description": "1-indexed page number (MongoDB) or 0-indexed (Spring Boot — see individual endpoints).",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        }
+      },
+      "LimitParam": {
+        "name": "limit",
+        "in": "query",
+        "description": "Number of results per page (max 500).",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500,
+          "default": 20
+        }
+      }
+    },
+    "securitySchemes": {}
+  }
+}

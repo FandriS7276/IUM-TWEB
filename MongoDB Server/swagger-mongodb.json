@@ -1,0 +1,2073 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "NeView — MongoDB API",
+    "description": "Reviews, awards, popularity and user management REST API served by the **Express.js / MongoDB** backend.\n\nIncludes:\n- Rotten Tomatoes-style review CRUD\n- Oscar nominations and wins (filterable, grouped by film)\n- Redis-backed popularity rankings (today, this week, trending, …)\n- Like toggle and view tracking (synced to PostgreSQL via BullMQ)\n- JWT-based user registration, login, and profile\n\nProtected endpoints require `Authorization: Bearer <token>` (obtain from `POST /api/user/login`).",
+    "version": "1.0.0",
+    "contact": {
+      "name": "NeView Team"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:4000",
+      "description": "Express.js server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Movie Activity (MongoDB)",
+      "description": "Like toggling and view tracking served by the MongoDB / Express server (port 4000)."
+    },
+    {
+      "name": "Reviews (MongoDB)",
+      "description": "Rotten Tomatoes-style review endpoints (read + write)."
+    },
+    {
+      "name": "Awards (MongoDB)",
+      "description": "Oscar nomination and win data with cross-referenced review statistics."
+    },
+    {
+      "name": "Popularity (MongoDB)",
+      "description": "Redis-backed popularity rankings by time window."
+    },
+    {
+      "name": "Users (MongoDB)",
+      "description": "Registration, login, and profile management."
+    },
+    {
+      "name": "Health",
+      "description": "Liveness probes."
+    },
+    {
+      "name": "Internal",
+      "description": "Internal service-to-service endpoints (not for public use)."
+    }
+  ],
+  "paths": {
+    "/api/awards/controversial-winners": {
+      "get": {
+        "tags": [
+          "Awards (MongoDB)"
+        ],
+        "summary": "Oscar winners with Rotten reviews",
+        "description": "Oscar winners that also received at least one Rotten review on the platform,\nsorted by **rotten review count** descending. Up to 5 rotten reviews are\nincluded per film.\n\nCached for **1 hour**.\n",
+        "operationId": "getControversialOscarWinners",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageParam"
+          },
+          {
+            "$ref": "#/components/parameters/LimitParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of controversial winners.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ControversialWinner"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/PaginationMeta"
+                    },
+                    "metadata": {
+                      "$ref": "#/components/schemas/PaginatedResponseMeta"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/movies/{movieId}/like": {
+      "post": {
+        "tags": [
+          "Movie Activity (MongoDB)"
+        ],
+        "summary": "Toggle like / unlike for a movie 🔒",
+        "description": "Toggles the authenticated user's like for a movie.\n\n- If the user has **not** liked the movie → creates a like document, returns `liked: true`.\n- If the user has **already** liked the movie → removes the like, returns `liked: false`.\n\nAfter a successful write:\n1. A 5-second per-user-per-movie Redis cooldown is set.\n2. A BullMQ event is published to sync the count to PostgreSQL asynchronously.\n3. The Redis popularity counter is incremented (likes only, not unlikes).\n\nRate limits: **20 requests/minute** (Express-rate-limit) + **5-second cooldown** (Redis).\n",
+        "operationId": "toggleLike",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "movieId",
+            "in": "path",
+            "required": true,
+            "description": "Internal PostgreSQL movie ID.",
+            "schema": {
+              "type": "integer",
+              "example": 42
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Like toggled successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "liked": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "action": {
+                      "type": "string",
+                      "enum": [
+                        "like",
+                        "unlike"
+                      ],
+                      "example": "like"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid movie ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Cooldown or rate limit active.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Please wait before toggling your like."
+                    },
+                    "retryAfter": {
+                      "type": "integer",
+                      "description": "Seconds until the cooldown expires.",
+                      "example": 3
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/internal/sync-movie": {
+      "post": {
+        "tags": [
+          "Internal"
+        ],
+        "summary": "Sync a movie title into the local cache",
+        "description": "Internal service-to-service endpoint. Adds a movie title to the\nin-memory/Redis movie title cache used for search autocomplete.\n\nRequires a static bearer token passed as `Authorization: Bearer <INTERNAL_TOKEN>`\n(configured via the `INTERNAL_TOKEN` environment variable — **not** a user JWT).\n",
+        "operationId": "syncMovieTitle",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "title"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "example": "Parasite"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Title synced successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid title.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized — invalid or missing internal token.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/user/profile": {
+      "get": {
+        "tags": [
+          "Users (MongoDB)"
+        ],
+        "summary": "Get the authenticated user's profile 🔒",
+        "description": "Returns the full profile for the token owner (no password hash).",
+        "operationId": "getProfile",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User profile.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/UserProfile"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reviews": {
+      "get": {
+        "tags": [
+          "Reviews (MongoDB)"
+        ],
+        "summary": "List / filter reviews",
+        "description": "Returns a paginated list of reviews. All filters are optional and can be\ncombined freely.\n\n**Sort syntax** (`sortBy`): comma-separated `field-direction` pairs.\nExample: `sortBy=review_date-desc,critic_name-asc`\n",
+        "operationId": "getReviews",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageParam"
+          },
+          {
+            "$ref": "#/components/parameters/LimitParam"
+          },
+          {
+            "name": "movie_title",
+            "in": "query",
+            "description": "Filter by exact movie title (case-insensitive collation).",
+            "schema": {
+              "type": "string",
+              "example": "Parasite"
+            }
+          },
+          {
+            "name": "review_type",
+            "in": "query",
+            "description": "Filter by review sentiment.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "Fresh",
+                "Rotten"
+              ]
+            }
+          },
+          {
+            "name": "top_critic",
+            "in": "query",
+            "description": "Filter to top-critic reviews only.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "from_date",
+            "in": "query",
+            "description": "Include only reviews on or after this date (ISO 8601).",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "example": "2020-01-01"
+            }
+          },
+          {
+            "name": "to_date",
+            "in": "query",
+            "description": "Include only reviews on or before this date (ISO 8601).",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "example": "2024-12-31"
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "description": "Sort spec. Example: `review_date-desc`",
+            "schema": {
+              "type": "string",
+              "example": "review_date-desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated review list.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Review"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/PaginationMeta"
+                    },
+                    "metadata": {
+                      "$ref": "#/components/schemas/PaginatedResponseMeta"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Reviews (MongoDB)"
+        ],
+        "summary": "Create a review 🔒",
+        "description": "Submits a new Fresh or Rotten review for a movie.\nRequires a valid JWT. Rate-limited to **5 submissions per 15 minutes** per user.\n\nAfter saving, the Redis stats cache for the movie is updated atomically\n(no cache invalidation needed).\n",
+        "operationId": "createReview",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "movie_title",
+                  "review_type",
+                  "review_content"
+                ],
+                "properties": {
+                  "movie_title": {
+                    "type": "string",
+                    "example": "Parasite"
+                  },
+                  "review_type": {
+                    "type": "string",
+                    "enum": [
+                      "Fresh",
+                      "Rotten"
+                    ],
+                    "example": "Fresh"
+                  },
+                  "review_content": {
+                    "type": "string",
+                    "minLength": 5,
+                    "maxLength": 2000,
+                    "example": "A masterful thriller that transcends genre."
+                  },
+                  "review_score": {
+                    "type": "string",
+                    "nullable": true,
+                    "example": "4/4"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Review created successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Review created"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Review"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/popular/trending": {
+      "get": {
+        "tags": [
+          "Popularity (MongoDB)"
+        ],
+        "summary": "Trending movies right now",
+        "description": "Hot movies based on recent activity — no pagination, just a flat list.",
+        "operationId": "getTrending",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum results.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trending movies.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PopularEntry"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reviews/{id}": {
+      "put": {
+        "tags": [
+          "Reviews (MongoDB)"
+        ],
+        "summary": "Update a review 🔒 *(stub — not yet implemented)*",
+        "operationId": "updateReview",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "501": {
+            "description": "Not implemented.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Reviews (MongoDB)"
+        ],
+        "summary": "Delete a review 🔒 *(stub — not yet implemented)*",
+        "operationId": "deleteReview",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "501": {
+            "description": "Not implemented.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/movies/{movieId}/like-status": {
+      "get": {
+        "tags": [
+          "Movie Activity (MongoDB)"
+        ],
+        "summary": "Check like status for a movie",
+        "description": "Returns whether the current user has liked this movie.\n**No authentication required** — unauthenticated callers always receive\n`liked: false`.\n",
+        "operationId": "getLikeStatus",
+        "parameters": [
+          {
+            "name": "movieId",
+            "in": "path",
+            "required": true,
+            "description": "Internal PostgreSQL movie ID.",
+            "schema": {
+              "type": "integer",
+              "example": 42
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Like status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "liked": {
+                      "type": "boolean",
+                      "example": false
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid movie ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/popular/today": {
+      "get": {
+        "tags": [
+          "Popularity (MongoDB)"
+        ],
+        "summary": "Most popular movies today",
+        "description": "Returns today's popular movies, ranked by a Redis-backed score that\ncombines views and likes. Refreshed daily at 00:05 UTC.\n",
+        "operationId": "getPopularToday",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageParam"
+          },
+          {
+            "$ref": "#/components/parameters/LimitParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Today's popular movies.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PopularEntry"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/awards/never-winning-nominees": {
+      "get": {
+        "tags": [
+          "Awards (MongoDB)"
+        ],
+        "summary": "Oscar nominees that never won",
+        "description": "Films nominated for at least one Oscar that never won a single award,\nsorted by **nomination count** descending, enriched with review stats.\n\nCached for **90 days** (Oscar data changes only once a year).\n",
+        "operationId": "getMostNominatedMovies",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageParam"
+          },
+          {
+            "$ref": "#/components/parameters/LimitParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of never-winning nominees.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NominatedMovie"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/PaginationMeta"
+                    },
+                    "metadata": {
+                      "$ref": "#/components/schemas/PaginatedResponseMeta"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/movies/view": {
+      "post": {
+        "tags": [
+          "Movie Activity (MongoDB)"
+        ],
+        "summary": "Record a movie page view",
+        "description": "Tracks a page view for popularity scoring. Public — no authentication\nrequired. Rate-limited to **30 requests/minute per IP**.\n\nReturns `202 Accepted` immediately; the Redis write is fire-and-forget\nso a slow Redis instance never blocks the page load.\n",
+        "operationId": "recordView",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "title"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "example": "Parasite"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "View recorded (or queued).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or empty `title`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/popular/this-week": {
+      "get": {
+        "tags": [
+          "Popularity (MongoDB)"
+        ],
+        "summary": "Most popular movies this week",
+        "description": "Refreshed weekly on Sunday at 00:05 UTC.",
+        "operationId": "getPopularThisWeek",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageParam"
+          },
+          {
+            "$ref": "#/components/parameters/LimitParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "This week's popular movies.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PopularEntry"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reviews/{id}/like": {
+      "post": {
+        "tags": [
+          "Reviews (MongoDB)"
+        ],
+        "summary": "Like a review 🔒 *(stub — not yet implemented)*",
+        "operationId": "likeReview",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "501": {
+            "description": "Not implemented.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/awards/snubbed": {
+      "get": {
+        "tags": [
+          "Awards (MongoDB)"
+        ],
+        "summary": "Critically loved but Oscar-snubbed movies",
+        "description": "Movies with at least one Fresh review that never won an Oscar,\nsorted by **tomatometer** descending. Enriched with aggregated review stats.\n\nCached for **90 days**.\n",
+        "operationId": "getSnubbedMovies",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageParam"
+          },
+          {
+            "$ref": "#/components/parameters/LimitParam"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of snubbed movies.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/EnrichedMovie"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/PaginationMeta"
+                    },
+                    "metadata": {
+                      "$ref": "#/components/schemas/PaginatedResponseMeta"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reviews/recent-movies": {
+      "get": {
+        "tags": [
+          "Reviews (MongoDB)"
+        ],
+        "summary": "Recently reviewed movie titles",
+        "description": "Returns unique movie titles ordered by their most recent review date\n(newest first). Designed for the homepage \"Recently Reviewed\" section.\nCheaper than `GET /api/reviews` — no review content, no pagination count.\n\nCached in Redis for 5 minutes.\n",
+        "operationId": "getRecentMovies",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of titles to return (max 100).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of recently reviewed movie titles.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "movie_title": {
+                            "type": "string",
+                            "example": "Parasite"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reviews/recent": {
+      "get": {
+        "tags": [
+          "Reviews (MongoDB)"
+        ],
+        "summary": "Recent reviews with card data",
+        "description": "Returns the N most recent reviews with only the fields needed by the\nhomepage `ReviewCard` component: `_id`, `movie_title`, `critic_name`,\n`review_type`, and a **truncated** `review_content` (max 200 chars).\n\nCached in Redis for 5 minutes.\n",
+        "operationId": "getRecentReviews",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of reviews to return (max 100).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent review cards.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RecentReview"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reviews/{id}/report": {
+      "post": {
+        "tags": [
+          "Reviews (MongoDB)"
+        ],
+        "summary": "Report a review 🔒 *(stub — not yet implemented)*",
+        "operationId": "reportReview",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "501": {
+            "description": "Not implemented.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reviews/stats": {
+      "get": {
+        "tags": [
+          "Reviews (MongoDB)"
+        ],
+        "summary": "Tomatometer stats for a movie",
+        "description": "Returns pre-computed Rotten Tomatoes-style statistics for a single movie.\nCached in Redis for **24 hours**.\n\n`tomatometer` is `null` (not `0`) when a movie has no reviews, so the\nfrontend can distinguish \"unrated\" from \"0% rotten\".\n",
+        "operationId": "getMovieReviewStats",
+        "parameters": [
+          {
+            "name": "movie_title",
+            "in": "query",
+            "required": true,
+            "description": "Exact movie title to look up.",
+            "schema": {
+              "type": "string",
+              "example": "Parasite"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Aggregated review stats.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "stats": {
+                      "$ref": "#/components/schemas/MovieStats"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`movie_title` is missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/user/login": {
+      "post": {
+        "tags": [
+          "Users (MongoDB)"
+        ],
+        "summary": "Authenticate and receive a JWT",
+        "description": "Verifies the supplied credentials using Argon2id and returns a signed JWT.\nThe error message is intentionally vague (\"Invalid email or password\") to\nprevent user enumeration.\n",
+        "operationId": "login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "example": "user@example.com"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "example": "s3cur3P@ss"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful. JWT included.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Login successful."
+                    },
+                    "token": {
+                      "type": "string",
+                      "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing email or password.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "API health check (MongoDB server)",
+        "description": "Returns version info and available endpoint paths.",
+        "operationId": "mongoHealthCheck",
+        "responses": {
+          "200": {
+            "description": "Service is live.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "API is live"
+                    },
+                    "version": {
+                      "type": "string",
+                      "example": "1.0"
+                    },
+                    "endpoints": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "example": [
+                        "/reviews",
+                        "/awards",
+                        "/popular",
+                        "/movies",
+                        "/user"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/awards/oscar": {
+      "get": {
+        "tags": [
+          "Awards (MongoDB)"
+        ],
+        "summary": "List Oscar nominations / wins (filterable + sortable)",
+        "description": "Returns Oscar records grouped by film, with all nominations and wins\nfor each film collected into an `awards` array.\n\n**Filters** (all optional, combinable):\n- `year_ceremony` — exact ceremony year (1929 – present)\n- `category` — award category name\n- `winner` — `true` | `false`\n- `from_date` / `to_date` — film release year range\n\n**Sort** (`sortBy`): comma-separated `field-direction` pairs.\nAllowed fields: `winsCount`, `totalNominations`, `year_film`, `film`.\n\nResults are cached in Redis.\n",
+        "operationId": "getAllOscars",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/PageParam"
+          },
+          {
+            "$ref": "#/components/parameters/LimitParam"
+          },
+          {
+            "name": "year_ceremony",
+            "in": "query",
+            "description": "Filter by ceremony year (e.g. `2020` for the 92nd Academy Awards).",
+            "schema": {
+              "type": "integer",
+              "example": 2020
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "description": "Filter by award category.",
+            "schema": {
+              "type": "string",
+              "example": "Best Picture"
+            }
+          },
+          {
+            "name": "winner",
+            "in": "query",
+            "description": "Filter to winners or non-winners.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "from_date",
+            "in": "query",
+            "description": "Film release year — lower bound.",
+            "schema": {
+              "type": "integer",
+              "example": 2010
+            }
+          },
+          {
+            "name": "to_date",
+            "in": "query",
+            "description": "Film release year — upper bound.",
+            "schema": {
+              "type": "integer",
+              "example": 2023
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "description": "Sort spec. Example: `winsCount-desc,year_film-asc`",
+            "schema": {
+              "type": "string",
+              "example": "winsCount-desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated, grouped Oscar records.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/OscarGrouped"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/PaginationMeta"
+                    },
+                    "metadata": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/PaginatedResponseMeta"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "appliedFilters": {
+                              "type": "object"
+                            },
+                            "appliedSort": {
+                              "type": "string"
+                            },
+                            "note": {
+                              "type": "string"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid filter or sort parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/popular/last-week": {
+      "get": {
+        "tags": [
+          "Popularity (MongoDB)"
+        ],
+        "summary": "Most popular movies last week",
+        "operationId": "getPopularLastWeek",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Last week's popular movies.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PopularEntry"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/popular/yesterday": {
+      "get": {
+        "tags": [
+          "Popularity (MongoDB)"
+        ],
+        "summary": "Most popular movies yesterday",
+        "operationId": "getPopularYesterday",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Yesterday's popular movies.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PopularEntry"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/user/register": {
+      "post": {
+        "tags": [
+          "Users (MongoDB)"
+        ],
+        "summary": "Register a new account",
+        "description": "Creates a new user account. The password is hashed with **Argon2id** via\na pre-save hook — the plain-text password is never stored.\n\nOn success, a JWT is issued immediately so the user is logged in right away.\n",
+        "operationId": "register",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "username",
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "username": {
+                    "type": "string",
+                    "example": "cinephile42"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "example": "user@example.com"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "minLength": 8,
+                    "example": "s3cur3P@ss"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Account created. JWT included.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Account created successfully."
+                    },
+                    "token": {
+                      "type": "string",
+                      "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing fields or password too short.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Email or username already taken.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "PopularEntry": {
+        "type": "object",
+        "description": "A movie title with its view/like score for a time window.",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "Parasite"
+          },
+          "score": {
+            "type": "number",
+            "format": "double",
+            "example": 9823.5
+          }
+        }
+      },
+      "UserProfile": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/User"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "joinedAt": {
+                "type": "string",
+                "format": "date-time",
+                "example": "2024-03-01T12:00:00.000Z"
+              },
+              "lastLogin": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true,
+                "example": "2025-01-15T08:30:00.000Z"
+              },
+              "preferences": {
+                "type": "object",
+                "nullable": true,
+                "additionalProperties": true
+              }
+            }
+          }
+        ]
+      },
+      "PaginationMeta": {
+        "type": "object",
+        "properties": {
+          "totalDocs": {
+            "type": "integer",
+            "example": 250
+          },
+          "currentPage": {
+            "type": "integer",
+            "example": 1
+          },
+          "totalPages": {
+            "type": "integer",
+            "example": 13
+          },
+          "hasNext": {
+            "type": "boolean",
+            "example": true
+          },
+          "hasPrev": {
+            "type": "boolean",
+            "example": false
+          },
+          "perPage": {
+            "type": "integer",
+            "example": 20
+          }
+        }
+      },
+      "RecentReview": {
+        "type": "object",
+        "description": "Lightweight review card — truncated content, no score.",
+        "properties": {
+          "_id": {
+            "type": "string",
+            "example": "64a1f2b3c4d5e6f7a8b9c0d1"
+          },
+          "movie_title": {
+            "type": "string",
+            "example": "Parasite"
+          },
+          "critic_name": {
+            "type": "string",
+            "nullable": true,
+            "example": "Roger Ebert"
+          },
+          "review_type": {
+            "type": "string",
+            "enum": [
+              "Fresh",
+              "Rotten"
+            ],
+            "example": "Fresh"
+          },
+          "review_content": {
+            "type": "string",
+            "description": "Truncated to 200 characters.",
+            "example": "A masterful thriller that transcends genre…"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "description": "Public user profile fields (no password hash).",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "64a1f2b3c4d5e6f7a8b9c0d1"
+          },
+          "username": {
+            "type": "string",
+            "example": "cinephile42"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "user@example.com"
+          },
+          "top_critic": {
+            "type": "boolean",
+            "example": false
+          },
+          "avatar": {
+            "type": "string",
+            "nullable": true,
+            "example": "https://cdn.example.com/avatars/cinephile42.png"
+          },
+          "bio": {
+            "type": "string",
+            "nullable": true,
+            "example": "Lover of slow burns and foreign cinema."
+          }
+        }
+      },
+      "MovieStats": {
+        "type": "object",
+        "description": "Aggregated Rotten Tomatoes-style review statistics for a movie.",
+        "properties": {
+          "totalReviews": {
+            "type": "integer",
+            "example": 84
+          },
+          "freshCount": {
+            "type": "integer",
+            "example": 71
+          },
+          "rottenCount": {
+            "type": "integer",
+            "example": 13
+          },
+          "tomatometer": {
+            "type": "number",
+            "format": "double",
+            "nullable": true,
+            "description": "Percentage of Fresh reviews (0–100). Null when there are no reviews.",
+            "example": 84.52
+          },
+          "topCriticFreshCount": {
+            "type": "integer",
+            "example": 22
+          },
+          "latestReview": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2025-01-10T08:00:00.000Z"
+          }
+        }
+      },
+      "PaginatedResponseMeta": {
+        "type": "object",
+        "properties": {
+          "fetchedAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2025-01-15T10:30:00.000Z"
+          },
+          "resultCount": {
+            "type": "integer",
+            "example": 20
+          }
+        }
+      },
+      "OscarGrouped": {
+        "type": "object",
+        "description": "All Oscar nominations/wins for a single film, grouped together.",
+        "properties": {
+          "film": {
+            "type": "string",
+            "example": "Parasite"
+          },
+          "year_film": {
+            "type": "integer",
+            "example": 2019
+          },
+          "winsCount": {
+            "type": "integer",
+            "example": 4
+          },
+          "totalNominations": {
+            "type": "integer",
+            "example": 6
+          },
+          "awards": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "category": {
+                  "type": "string",
+                  "example": "Best Picture"
+                },
+                "year_ceremony": {
+                  "type": "integer",
+                  "example": 2020
+                },
+                "name": {
+                  "type": "string",
+                  "example": "Bong Joon-ho"
+                },
+                "winner": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "ceremony": {
+                  "type": "integer",
+                  "example": 92
+                }
+              }
+            }
+          }
+        }
+      },
+      "Review": {
+        "type": "object",
+        "description": "A single Rotten Tomatoes-style review document.",
+        "properties": {
+          "_id": {
+            "type": "string",
+            "example": "64a1f2b3c4d5e6f7a8b9c0d1"
+          },
+          "movie_title": {
+            "type": "string",
+            "example": "Parasite"
+          },
+          "critic_name": {
+            "type": "string",
+            "nullable": true,
+            "example": "Roger Ebert"
+          },
+          "review_type": {
+            "type": "string",
+            "enum": [
+              "Fresh",
+              "Rotten"
+            ],
+            "example": "Fresh"
+          },
+          "review_content": {
+            "type": "string",
+            "example": "A masterful thriller that transcends genre."
+          },
+          "review_score": {
+            "type": "string",
+            "nullable": true,
+            "example": "4/4"
+          },
+          "top_critic": {
+            "type": "boolean",
+            "example": false
+          },
+          "review_date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2019-11-08T00:00:00.000Z"
+          }
+        }
+      },
+      "NominatedMovie": {
+        "type": "object",
+        "description": "An Oscar-nominated film that never won, with stats.",
+        "properties": {
+          "film": {
+            "type": "string",
+            "example": "The Shawshank Redemption"
+          },
+          "nominations": {
+            "type": "integer",
+            "example": 7
+          },
+          "stats": {
+            "$ref": "#/components/schemas/MovieStats"
+          }
+        }
+      },
+      "ControversialWinner": {
+        "type": "object",
+        "description": "An Oscar winner that also received Rotten reviews.",
+        "properties": {
+          "year": {
+            "type": "integer",
+            "example": 2020
+          },
+          "category": {
+            "type": "string",
+            "example": "Best Picture"
+          },
+          "film": {
+            "type": "string",
+            "example": "Parasite"
+          },
+          "winner": {
+            "type": "boolean",
+            "example": true
+          },
+          "rotten_count": {
+            "type": "integer",
+            "example": 3
+          },
+          "rotten_reviews": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "example": "Parasite"
+                },
+                "score": {
+                  "type": "string",
+                  "example": "2/5"
+                },
+                "content": {
+                  "type": "string",
+                  "example": "Overrated and overhyped."
+                }
+              }
+            }
+          }
+        }
+      },
+      "EnrichedMovie": {
+        "type": "object",
+        "description": "A movie title paired with its aggregated review statistics.",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "Parasite"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/MovieStats"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "message": {
+            "type": "string",
+            "example": "An error occurred."
+          }
+        }
+      }
+    },
+    "parameters": {
+      "PageParam": {
+        "name": "page",
+        "in": "query",
+        "description": "1-indexed page number (MongoDB) or 0-indexed (Spring Boot — see individual endpoints).",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        }
+      },
+      "LimitParam": {
+        "name": "limit",
+        "in": "query",
+        "description": "Number of results per page (max 500).",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500,
+          "default": 20
+        }
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT issued by `POST /api/user/login` (MongoDB Server).\nInclude it in every protected request as:\n`Authorization: Bearer <token>`\n"
+      }
+    }
+  }
+}
