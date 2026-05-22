@@ -46,6 +46,17 @@ export function initSocket(server: HttpServer): SocketServer {
             socket.emit('joined', { message: `Welcome to ${movieTitle} chat` });
         });
 
+        // Client sends movieTitle to unsubscribe from a movie's chat room.
+        // Without this handler the socket would remain in the room server-side
+        // even after the frontend component unmounts, causing stale broadcasts
+        // and a slow server-side room-membership leak.
+        socket.on('leaveMovie', (movieTitle: string) => {
+            if (!movieTitle) return;
+            const room = `movie-${movieTitle.trim()}`;
+            socket.leave(room);
+            console.log(`${socket.id} left ${room}`);
+        });
+
         // Client sends { movieTitle, message, user } to post a chat message
         socket.on('chatMessage', ({
             movieTitle, message, user
