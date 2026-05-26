@@ -20,28 +20,7 @@
 
 services:
 
-  # ── MongoDB (local — not containerised in dev) ────────────────────────────
-  # Your local mongod process (port 27017) already holds all your data.
-  # Containerising it would give you an empty database.
-  # The backend reaches it via host.docker.internal (see backend environment below).
-  # Uncomment this block only when you need a clean, isolated DB (e.g. CI/CD).
-  #
-  # mongodb:
-  #   image: mongo:7
-  #   container_name: neview_mongodb
-  #   ports:
-  #     - "27017:27017"
-  #   volumes:
-  #     - mongodb_data:/data/db
-  #   networks:
-  #     - neview_network
-  #   healthcheck:
-  #     test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-
-  # ── 2. Redis ─────────────────────────────────────────────────────────────────
+  # ── 1. Redis ─────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: neview_redis
@@ -60,7 +39,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── 3. Backend (Express + TypeScript) ────────────────────────────────────────
+  # ── 2. Backend (Express + TypeScript) ────────────────────────────────────────
   backend:
     build:
       context: ./MongoDB Server             # Folder containing the backend Dockerfile
@@ -101,7 +80,7 @@ services:
     networks:
       - neview_network
 
-  # ── 4. pg-api (Spring Boot REST API) ─────────────────────────────────────────
+  # ── 3. pg-api (Spring Boot REST API) ─────────────────────────────────────────
   pg-api:
     build:
       context: ./PostgreSQL Server
@@ -121,7 +100,7 @@ services:
     networks:
       - neview_network
 
-  # ── 5. Frontend (React + Vite — NeView) ──────────────────────────────────────
+  # ── 4. Frontend (React + Vite — NeView) ──────────────────────────────────────
   frontend:
     build:
       context: ./NeView

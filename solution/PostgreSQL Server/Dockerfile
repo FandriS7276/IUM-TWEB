@@ -20,13 +20,6 @@ WORKDIR /app
 
 COPY --from=build /app/target/*.jar app.jar
 
-# Declare expected environment variables (values are injected at runtime via --env-file or docker-compose)
-ENV DB_HOST=localhost \
-    DB_PORT=5432 \
-    DB_NAME= \
-    DB_USER= \
-    DB_PASSWORD=
-
 EXPOSE 8080
 
 ENTRYPOINT ["java", "-jar", "app.jar"]
